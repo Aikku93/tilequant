@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 /**************************************/
+#include "Compat.h"
 #include "Bitmap.h"
 #include "PxType.h"
 #include "Tiles.h"
@@ -192,12 +193,12 @@ int main(int argc, const char *argv[]) {
 		printf("Out of memory; image not processed\n");
 		free(Palette);
 		free(PxData);
-		free(TilesData);
+		free_aligned(TilesData);
 		BmpCtx_Destroy(&Image);
 		return -1;
 	}
 	struct YUVAf_t RMSE = ProcessImage(&Image, TilesData, PxData, Palette, MaxTilePals, MaxPalSize);
-	free(TilesData);
+	free_aligned(TilesData);
 
 	//! Output PSNR
 #if MEASURE_PSNR
