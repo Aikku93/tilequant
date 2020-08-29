@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 /**************************************/
+#include "Compat.h"
 #include "Quantize.h"
 #include "Tiles.h"
 /**************************************/
@@ -188,7 +189,7 @@ int TilesData_QuantizePalettes(struct TilesData_t *TilesData, struct YUVAf_t *Pa
 	}
 
 	//! Clean up, return
-	free(Clusters);
+	free_aligned(Clusters);
 	return 1;
 }
 
