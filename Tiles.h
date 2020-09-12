@@ -4,22 +4,22 @@
 #include <stdint.h>
 /**************************************/
 #include "Bitmap.h"
-#include "PxType.h"
+#include "Colourspace.h"
 /**************************************/
 
 union TilePx_t {
-	struct YUVAf_t *PxYUVA;
-	struct BGR8_t  *PxBGRA;
-	uint8_t  PxIdx;
+	struct BGRAf_t *PxBGRAf;
+	struct BGR8_t  *PxBGRA8;
+	uint8_t PxIdx;
 };
 
 struct TilesData_t {
 	int TileW,  TileH;
 	int TilesX, TilesY;
 	union TilePx_t *TilePxPtr;  //! Tile pixel pointers
-	struct YUVAf_t *TileValue;  //! Tile values
-	struct YUVAf_t *PxData;     //! Tile pixel data
-	struct YUVAf_t *PxTemp;     //! Temporary processing data
+	struct BGRAf_t *TileValue;  //! Tile values (for quantization comparisons)
+	struct BGRAf_t *PxData;     //! Tile pixel data
+	struct BGRAf_t *PxTemp;     //! Temporary processing data
 	int32_t        *PxTempIdx;  //! Temporary processing data (palette entry indices)
 	int32_t        *TilePalIdx; //! Tile palette indices
 };
@@ -33,7 +33,7 @@ struct TilesData_t *TilesData_FromBitmap(const struct BmpCtx_t *Ctx, int TileW, 
 //! Create quantized palette
 //! NOTE: PalUnusedEntries is used for 'padding', such as on
 //! the GBA/NDS where index 0 of every palette is transparent
-int TilesData_QuantizePalettes(struct TilesData_t *TilesData, struct YUVAf_t *Palette, int MaxTilePals, int MaxPalSize, int PalUnusedEntries);
+int TilesData_QuantizePalettes(struct TilesData_t *TilesData, struct BGRAf_t *Palette, int MaxTilePals, int MaxPalSize, int PalUnusedEntries);
 
 /**************************************/
 //! EOF

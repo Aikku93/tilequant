@@ -4,7 +4,7 @@
 #include <stdlib.h>
 /**************************************/
 #include "Bitmap.h"
-#include "PxType.h"
+#include "Colourspace.h"
 #include "Tiles.h"
 /**************************************/
 #define TILE_W 8
@@ -12,18 +12,30 @@
 #define PALUNUSED 1 //! These will be filled with {0,0,0,0} but still be used for matching
 #define BITRANGE (const struct BGRA8_t){0x1F,0x1F,0x1F,0x01} //! None of these may be 0
 /**************************************/
-#define DITHER 1
-#define DITHER_SERPENTINE 1
+
+//! Dither modes available
+#define DITHER_NONE           ( 0) //! No dither
+#define DITHER_ORDERED(n)     ( n) //! Ordered dithering (Kernel size: (2^n) x (2^n))
+#define DITHER_FLOYDSTEINBERG (-1) //! Floyd-Steinberg (diffusion)
+
+//! Dither settings
+//! NOTE: Ordered dithering gives consistent tiled results, but Floyd-Steinberg can look nicer.
+//!       Recommend dither level of 0.5 for ordered, and 1.0 for Floyd-Steinberg.
+#define DITHER_LEVEL 0.5f
+#define DITHER_TYPE  DITHER_ORDERED(3)
+
+//! When not zero, the PSNR for each channel will be displayed
 #define MEASURE_PSNR 1
+
 /**************************************/
 
 //! Palette entry matching
-static inline int FindPaletteEntry(const struct YUVAf_t *Px, const struct YUVAf_t *Pal, int MaxPalSize) {
+static int FindPaletteEntry(const struct BGRAf_t *Px, const struct BGRAf_t *Pal, int MaxPalSize) {
 	int   i;
 	int   MinIdx = 0;
-	float MinDst = 1.0e30f;
+	float MinDst = 0x1.0p126f;
 	for(i=PALUNUSED-1;i<MaxPalSize;i++) {
-		float Dst = YUVAf_ColDistance(Px, &Pal[i]);
+		float Dst = BGRAf_ColDistance(Px, &Pal[i]);
 		if(Dst < MinDst) MinIdx = i, MinDst = Dst;
 	}
 	return MinIdx;
@@ -33,7 +45,14 @@ static inline int FindPaletteEntry(const struct YUVAf_t *Px, const struct YUVAf_
 
 //! Handle conversion of image with given palette, return RMS error
 //! NOTE: Lots of pointer aliasing to avoid even more memory consumption
-static inline struct YUVAf_t ProcessImage(struct BmpCtx_t *Image, struct TilesData_t *TilesData, uint8_t *PxData, struct YUVAf_t *Palette, int MaxTilePals, int MaxPalSize) {
+static struct BGRAf_t ProcessImage(
+	struct BmpCtx_t *Image,
+	struct TilesData_t *TilesData,
+	uint8_t *PxData,
+	struct BGRAf_t *Palette,
+	int MaxTilePals,
+	int MaxPalSize
+) {
 	int i;
 
 	//! Do processing
@@ -47,95 +66,106 @@ static inline struct YUVAf_t ProcessImage(struct BmpCtx_t *Image, struct TilesDa
 	int TileH = TilesData->TileH;
 	int32_t *TilePalIdx = TilesData->TilePalIdx;
 #if MEASURE_PSNR
-	      struct YUVAf_t  RMSE     = (struct YUVAf_t){0,0,0,0};
+	      struct BGRAf_t  RMSE     = (struct BGRAf_t){0,0,0,0};
 #endif
 	const        uint8_t *PxSrcIdx = Image->ColPal ? Image->PxIdx  : NULL;
 	const struct BGRA8_t *PxSrcBGR = Image->ColPal ? Image->ColPal : Image->PxBGR;
-#if DITHER
-	      struct YUVAf_t *PxDiffuse = TilesData->PxData;
-	for(y=0;y<ImgH;y++) for(x=0;x<ImgW;x++) PxDiffuse[y*ImgW+x] = (struct YUVAf_t){0,0,0,0};
+#if DITHER_TYPE != DITHER_NONE
+# if DITHER_TYPE == DITHER_FLOYDSTEINBERG
+	struct BGRAf_t *PxDiffuse = TilesData->PxData;
+	for(y=0;y<ImgH;y++) for(x=0;x<ImgW;x++) PxDiffuse[y*ImgW+x] = (struct BGRAf_t){0,0,0,0};
+# else
+	struct BGRAf_t *PaletteSpread = TilesData->PxData;
+	for(i=0;i<MaxTilePals;i++) {
+		//! Find the mean values of this palette
+		int n;
+		struct BGRAf_t Mean = (struct BGRAf_t){0,0,0,0};
+		for(n=PALUNUSED;n<MaxPalSize;n++) Mean = BGRAf_Add(&Mean, &Palette[i*MaxPalSize+n]);
+		Mean = BGRAf_Divi(&Mean, MaxPalSize-PALUNUSED);
+
+		//! Compute the least-squares slopes and store to the palette spread
+		struct BGRAf_t Spread = (struct BGRAf_t){0,0,0,0};
+		for(n=PALUNUSED;n<MaxPalSize;n++) {
+			struct BGRAf_t d = BGRAf_Sub(&Palette[i*MaxPalSize+n], &Mean);
+			d = BGRAf_Mul(&d, &d);
+			Spread = BGRAf_Add(&Spread, &d);
+		}
+		Spread = BGRAf_Divi(&Spread, MaxPalSize-PALUNUSED);
+		PaletteSpread[i] = BGRAf_Sqrt(&Spread);
+	}
+# endif
 #endif
 	for(y=0;y<ImgH;y++) for(x=0;x<ImgW;x++) {
-#if DITHER && DITHER_SERPENTINE
-		if(y%2) x = ImgW-1 - x;
-#endif
+		int PalIdx = TilePalIdx[(y/TileH)*(ImgW/TileW) + (x/TileW)];
+
 		//! Get original pixel data
-		struct YUVAf_t pYUVA, pYUVA_Original; {
-			struct BGRA8_t pBGR;
-			if(PxSrcIdx) pBGR = PxSrcBGR[PxSrcIdx[y*ImgW + x]];
-			else         pBGR = PxSrcBGR[         y*ImgW + x ];
-			pYUVA = pYUVA_Original = YUVAf_FromBGRA8(&pBGR);
+		struct BGRAf_t Px, Px_Original; {
+			struct BGRA8_t p;
+			if(PxSrcIdx) p = PxSrcBGR[PxSrcIdx[y*ImgW + x]];
+			else         p = PxSrcBGR[         y*ImgW + x ];
+			Px = Px_Original = BGRAf_FromBGRA8(&p);
 		}
-#if DITHER
+#if DITHER_TYPE != DITHER_NONE
+# if DITHER_TYPE == DITHER_FLOYDSTEINBERG
 		//! Adjust for diffusion error
-		pYUVA = YUVAf_Add(&pYUVA, &PxDiffuse[y*ImgW + x]);
+		{
+			struct BGRAf_t Dif = PxDiffuse[y*ImgW + x];
+			Dif = BGRAf_Muli(&Dif, DITHER_LEVEL);
+			Px  = BGRAf_Add (&Px, &Dif);
+		}
+# else
+		//! Adjust for dither matrix
+		{
+			int Threshold = 0, xKey = x, yKey = x^y;
+			int Bit = DITHER_TYPE-1; do {
+				Threshold = Threshold*2 + (yKey & 1), yKey >>= 1; //! <- Hopefully turned into "SHR, ADC"
+				Threshold = Threshold*2 + (xKey & 1), xKey >>= 1;
+			} while(--Bit >= 0);
+			float fThres = Threshold * (1.0f / (1 << (2*DITHER_TYPE))) - 0.5f;
+			struct BGRAf_t DitherVal = BGRAf_Muli(&PaletteSpread[PalIdx], fThres*DITHER_LEVEL);
+			Px = BGRAf_Add(&Px, &DitherVal);
+		}
+# endif
 #endif
 		//! Find matching palette entry and store
-		int PalIdx = TilePalIdx[(y/TileH)*(ImgW/TileW) + (x/TileW)];
-		int PalCol = FindPaletteEntry(&pYUVA, Palette + PalIdx*MaxPalSize, MaxPalSize);
+		int PalCol = FindPaletteEntry(&Px, Palette + PalIdx*MaxPalSize, MaxPalSize);
 		PxData[y*ImgW + x] = PalIdx*MaxPalSize + PalCol;
-#if MEASURE_PSNR || DITHER
-		struct YUVAf_t Error = YUVAf_Sub(&pYUVA_Original, &Palette[PxData[y*ImgW + x]]);
+#if MEASURE_PSNR || DITHER_TYPE == DITHER_FLOYDSTEINBERG
+		struct BGRAf_t Error = BGRAf_Sub(&Px_Original, &Palette[PxData[y*ImgW + x]]);
 #endif
-#if DITHER
+#if DITHER_TYPE == DITHER_FLOYDSTEINBERG
 		//! Store error diffusion
-#if DITHER_SERPENTINE
-		if(y%2) {
-			if(y+1 < ImgH) {
-				if(x+1 < ImgW) {
-					struct YUVAf_t t = YUVAf_Muli(&Error, 3.0f/16);
-					PxDiffuse[(y+1)*ImgW+(x+1)] = YUVAf_Add(&PxDiffuse[(y+1)*ImgW+(x+1)], &t);
-				}
-				if(1) {
-					struct YUVAf_t t = YUVAf_Muli(&Error, 5.0f/16);
-					PxDiffuse[(y+1)*ImgW+(x  )] = YUVAf_Add(&PxDiffuse[(y+1)*ImgW+(x  )], &t);
-				}
-				if(x > 0) {
-					struct YUVAf_t t = YUVAf_Muli(&Error, 1.0f/16);
-					PxDiffuse[(y+1)*ImgW+(x-1)] = YUVAf_Add(&PxDiffuse[(y+1)*ImgW+(x-1)], &t);
-				}
-			}
+		if(y+1 < ImgH) {
 			if(x > 0) {
-					struct YUVAf_t t = YUVAf_Muli(&Error, 7.0f/16);
-					PxDiffuse[(y  )*ImgW+(x-1)] = YUVAf_Add(&PxDiffuse[(y  )*ImgW+(x-1)], &t);
+				struct BGRAf_t t = BGRAf_Muli(&Error, 3.0f/16);
+				PxDiffuse[(y+1)*ImgW+(x-1)] = BGRAf_Add(&PxDiffuse[(y+1)*ImgW+(x-1)], &t);
 			}
-		} else {
-#endif
-			if(y+1 < ImgH) {
-				if(x > 0) {
-					struct YUVAf_t t = YUVAf_Muli(&Error, 3.0f/16);
-					PxDiffuse[(y+1)*ImgW+(x-1)] = YUVAf_Add(&PxDiffuse[(y+1)*ImgW+(x-1)], &t);
-				}
-				if(1) {
-					struct YUVAf_t t = YUVAf_Muli(&Error, 5.0f/16);
-					PxDiffuse[(y+1)*ImgW+(x  )] = YUVAf_Add(&PxDiffuse[(y+1)*ImgW+(x  )], &t);
-				}
-				if(x+1 < ImgW) {
-					struct YUVAf_t t = YUVAf_Muli(&Error, 1.0f/16);
-					PxDiffuse[(y+1)*ImgW+(x+1)] = YUVAf_Add(&PxDiffuse[(y+1)*ImgW+(x+1)], &t);
-				}
+			if(1) {
+				struct BGRAf_t t = BGRAf_Muli(&Error, 5.0f/16);
+				PxDiffuse[(y+1)*ImgW+(x  )] = BGRAf_Add(&PxDiffuse[(y+1)*ImgW+(x  )], &t);
 			}
 			if(x+1 < ImgW) {
-					struct YUVAf_t t = YUVAf_Muli(&Error, 7.0f/16);
-					PxDiffuse[(y  )*ImgW+(x+1)] = YUVAf_Add(&PxDiffuse[(y  )*ImgW+(x+1)], &t);
+				struct BGRAf_t t = BGRAf_Muli(&Error, 1.0f/16);
+				PxDiffuse[(y+1)*ImgW+(x+1)] = BGRAf_Add(&PxDiffuse[(y+1)*ImgW+(x+1)], &t);
 			}
-#if DITHER_SERPENTINE
 		}
-		if(y%2) x = ImgW-1 - x;
-#endif
+		if(x+1 < ImgW) {
+				struct BGRAf_t t = BGRAf_Muli(&Error, 7.0f/16);
+				PxDiffuse[(y  )*ImgW+(x+1)] = BGRAf_Add(&PxDiffuse[(y  )*ImgW+(x+1)], &t);
+		}
 #endif
 #if MEASURE_PSNR
-		//! Add error to RMSE
-		Error = YUVAf_Mul(&Error, &Error);
-		RMSE  = YUVAf_Add(&RMSE, &Error);
+		//! Accumulate squared error
+		Error = BGRAf_Mul(&Error, &Error);
+		RMSE  = BGRAf_Add(&RMSE, &Error);
 #endif
 	}
 
-	//! Convert palette to BGRA
+	//! Store the final palette
 	//! NOTE: This aliases over the original palette, but is
-	//! safe because BGRA8_t is smaller than YUVAf_t
+	//! safe because BGRA8_t is smaller than BGRAf_t
 	struct BGRA8_t *PalBGR = (struct BGRA8_t*)Palette;
-	for(i=0;i<BMP_PALETTE_COLOURS;i++) PalBGR[i] = BGRA8_FromYUVAf(&Palette[i]);
+	for(i=0;i<BMP_PALETTE_COLOURS;i++) PalBGR[i] = BGRA8_FromBGRAf(&Palette[i]);
 
 	//! Store new image data
 	if(Image->ColPal) {
@@ -147,11 +177,11 @@ static inline struct YUVAf_t ProcessImage(struct BmpCtx_t *Image, struct TilesDa
 
 	//! Return error
 #if MEASURE_PSNR
-	RMSE = YUVAf_Divi(&RMSE, ImgW*ImgH);
-	RMSE = YUVAf_Sqrt(&RMSE);
+	RMSE = BGRAf_Divi(&RMSE, ImgW*ImgH);
+	RMSE = BGRAf_Sqrt(&RMSE);
 	return RMSE;
 #else
-	return (struct YUVAf_t){0,0,0,0};
+	return (struct BGRAf_t){0,0,0,0};
 #endif
 }
 
@@ -187,7 +217,7 @@ int main(int argc, const char *argv[]) {
 	//! NOTE: PxData and Palette will be assigned to image; do NOT destroy
 	struct TilesData_t *TilesData = TilesData_FromBitmap(&Image, TILE_W, TILE_H, &BITRANGE);
 	       uint8_t     *PxData    = malloc(Image.Width * Image.Height * sizeof(uint8_t));
-	struct YUVAf_t     *Palette   = calloc(BMP_PALETTE_COLOURS, sizeof(struct YUVAf_t));
+	struct BGRAf_t     *Palette   = calloc(BMP_PALETTE_COLOURS, sizeof(struct BGRAf_t));
 	if(!TilesData || !PxData || !Palette) {
 		printf("Out of memory; image not processed\n");
 		free(Palette);
@@ -196,16 +226,16 @@ int main(int argc, const char *argv[]) {
 		BmpCtx_Destroy(&Image);
 		return -1;
 	}
-	struct YUVAf_t RMSE = ProcessImage(&Image, TilesData, PxData, Palette, MaxTilePals, MaxPalSize);
+	struct BGRAf_t RMSE = ProcessImage(&Image, TilesData, PxData, Palette, MaxTilePals, MaxPalSize);
 	free(TilesData);
 
 	//! Output PSNR
 #if MEASURE_PSNR
-	RMSE.y = -20.0f*log10f(RMSE.y / 255.0f);
-	RMSE.u = -20.0f*log10f(RMSE.u / 255.0f);
-	RMSE.v = -20.0f*log10f(RMSE.v / 255.0f);
-	RMSE.a = -20.0f*log10f(RMSE.a / 255.0f);
-	printf("PSNR = {%.3fdB, %.3fdB, %.3fdB, %.3fdB}\n", RMSE.y, RMSE.u, RMSE.v, RMSE.a);
+	RMSE.b = -0x1.15F2CFp3f*logf(RMSE.b / 255.0f); //! -20*Log10[RMSE/255] == -20/Log[10] * Log[RMSE/255]
+	RMSE.g = -0x1.15F2CFp3f*logf(RMSE.g / 255.0f);
+	RMSE.r = -0x1.15F2CFp3f*logf(RMSE.r / 255.0f);
+	RMSE.a = -0x1.15F2CFp3f*logf(RMSE.a / 255.0f);
+	printf("PSNR = {%.3fdB, %.3fdB, %.3fdB, %.3fdB}\n", RMSE.b, RMSE.g, RMSE.r, RMSE.a);
 #else
 	(void)RMSE;
 #endif

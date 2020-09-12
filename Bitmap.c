@@ -1,12 +1,11 @@
 /**************************************/
-#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 /**************************************/
 #include "Bitmap.h"
-#include "PxType.h"
+#include "Colourspace.h"
 /**************************************/
 
 //! Clear context data
