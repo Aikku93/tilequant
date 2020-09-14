@@ -48,10 +48,19 @@ static inline struct BGRAf_t BGRAf_FromBGRA8(const struct BGRA8_t *x) {
 //! x->r = Cg
 static inline struct BGRAf_t BGRAf_AsYCoCg(const struct BGRAf_t *x) {
 	return (struct BGRAf_t){
-		( x->r + 2*x->g + x->b) * 0.25f, //! YCoCg transformation
+		( x->r + 2*x->g + x->b) * 0.25f,
 		(-x->r + 2*x->g - x->b) * 0.50f,
 		( x->r          - x->b) * 1.00f,
 		( x->a                ) * 1.00f
+	};
+}
+
+static inline struct BGRAf_t BGRAf_FromYCoCg(const struct BGRAf_t *x) {
+	return (struct BGRAf_t){
+		x->b - 0.5f*(x->g + x->r),
+		x->b + 0.5f*(x->g       ),
+		x->b - 0.5f*(x->g - x->r),
+		x->a
 	};
 }
 
@@ -123,6 +132,15 @@ static inline struct BGRAf_t BGRAf_Div(const struct BGRAf_t *a, const struct BGR
 	Out.g = a->g / b->g;
 	Out.r = a->r / b->r;
 	Out.a = a->a / b->a;
+	return Out;
+}
+
+static inline struct BGRAf_t BGRAf_DivSafe(const struct BGRAf_t *a, const struct BGRAf_t *b, const struct BGRAf_t *DivByZeroValue) {
+	struct BGRAf_t Out;
+	Out.b = (b->b == 0.0f) ? DivByZeroValue->b : (a->b / b->b);
+	Out.g = (b->g == 0.0f) ? DivByZeroValue->g : (a->g / b->g);
+	Out.r = (b->r == 0.0f) ? DivByZeroValue->r : (a->r / b->r);
+	Out.a = (b->a == 0.0f) ? DivByZeroValue->a : (a->a / b->a);
 	return Out;
 }
 
@@ -208,13 +226,9 @@ static inline struct BGRAf_t BGRAf_Abs(const struct BGRAf_t *x) {
 /**************************************/
 
 //! Colour distance function
-//! It appears that taking the RGB difference and converting this to
-//! a more psychovisual domain gives better results than raw RGB or
-//! even raw psychovisual.
 static inline float BGRAf_ColDistance(const struct BGRAf_t *a, const struct BGRAf_t *b) {
 	struct BGRAf_t d = BGRAf_Sub(a, b);
-	d = BGRAf_AsYCoCg(&d);
-	return BGRAf_Dot(&d, &d);
+	return BGRAf_Len2(&d);
 }
 
 /**************************************/
