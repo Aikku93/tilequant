@@ -6,8 +6,8 @@
 #include "Quantize.h"
 #include "Tiles.h"
 /**************************************/
-#define MAX_PALETTE_INDICES_PASSES      16
-#define MAX_PALETTE_QUANTIZATION_PASSES 16
+#define MAX_PALETTE_INDICES_PASSES      64
+#define MAX_PALETTE_QUANTIZATION_PASSES 64
 /**************************************/
 #define ALIGN2N(x,N) (((x) + (N)-1) &~ ((N)-1))
 #define DATA_ALIGNMENT 32
@@ -33,9 +33,9 @@ static inline __attribute__((always_inline)) void ConvertToTiles(
 	struct BGRAf_t *TileValue = TilesData->TileValue;
 	struct BGRAf_t *PxData    = TilesData->PxData;
 	for(ty=0;ty<nTileY;ty++) for(tx=0;tx<nTileX;tx++) {
-		//! Copy pixels and get luma- and alpha-weighted smooth-max value
+		//! Copy pixels and get its value (here, an approximation to its gamut)
 		//! This is one of the most critical criteria for good palettization
-		struct BGRAf_t Sum = {0,0,0,0}, Weight = {0,0,0,0};
+		struct BGRAf_t Sum = {0,0,0,0};
 		for(py=0;py<TileH;py++) for(px=0;px<TileW;px++) {
 			//! Get original BGR pixel
 			struct BGRA8_t pBGR;
@@ -43,26 +43,19 @@ static inline __attribute__((always_inline)) void ConvertToTiles(
 			else      pBGR = PxBGR[      (ty*TileH+py)*(nTileX*TileW) + (tx*TileW+px) ];
 
 			//! Convert range and store pixel
-			pBGR.b = pBGR.b*BitRange->b/255;
-			pBGR.g = pBGR.g*BitRange->g/255;
-			pBGR.r = pBGR.r*BitRange->r/255;
-			pBGR.a = pBGR.a*BitRange->a/255;
+			pBGR.b = pBGR.b*(BitRange->b+1)/256;
+			pBGR.g = pBGR.g*(BitRange->g+1)/256;
+			pBGR.r = pBGR.r*(BitRange->r+1)/256;
+			pBGR.a = pBGR.a*(BitRange->a+1)/256;
 			struct BGRAf_t Px = BGRAf_FromBGRA(&pBGR, BitRange);
+			Px = BGRAf_AsYCoCg(&Px);
 			PxData[py*TileW+px] = Px;
-
-			//! Apply weight and accumulate to value
-			//! Adding 4.0 is equivalent to adding 1.0 to the weight,
-			//! as the luma value (r+2*g+b) is scaled by 4.0 anyway.
-			struct BGRAf_t w   = BGRAf_Muli(&Px, Px.a * (Px.r + 2*Px.g + Px.b));
-			               w   = BGRAf_Addi(&w, 4.0f);
-			struct BGRAf_t wPx = BGRAf_Mul (&Px, &w);
-			Sum    = BGRAf_Add(&Sum,    &wPx);
-			Weight = BGRAf_Add(&Weight, &w);
+			Sum = BGRAf_Add(&Sum, &Px);
 		}
 
 		//! Get final smooth-max value and move to next tile
 		(TilePxPtr++)->PxBGRAf = PxData;
-		*TileValue++ = BGRAf_Div(&Sum, &Weight);
+		*TileValue++ = Sum;
 		PxData += TileW*TileH;
 	}
 }
