@@ -83,15 +83,14 @@ static struct BGRAf_t ProcessImage(
 		for(n=PALUNUSED;n<MaxPalSize;n++) Mean = BGRAf_Add(&Mean, &Palette[i*MaxPalSize+n]);
 		Mean = BGRAf_Divi(&Mean, MaxPalSize-PALUNUSED);
 
-		//! Compute the least-squares slopes and store to the palette spread
+		//! Compute the average slopes and store to the palette spread
 		struct BGRAf_t Spread = (struct BGRAf_t){0,0,0,0};
 		for(n=PALUNUSED;n<MaxPalSize;n++) {
 			struct BGRAf_t d = BGRAf_Sub(&Palette[i*MaxPalSize+n], &Mean);
-			d = BGRAf_Mul(&d, &d);
+			d = BGRAf_Abs(&d);
 			Spread = BGRAf_Add(&Spread, &d);
 		}
-		Spread = BGRAf_Divi(&Spread, MaxPalSize-PALUNUSED);
-		PaletteSpread[i] = BGRAf_Sqrt(&Spread);
+		PaletteSpread[i] = BGRAf_Divi(&Spread, MaxPalSize-PALUNUSED);
 	}
 # endif
 #endif
@@ -103,7 +102,9 @@ static struct BGRAf_t ProcessImage(
 			struct BGRA8_t p;
 			if(PxSrcIdx) p = PxSrcBGR[PxSrcIdx[y*ImgW + x]];
 			else         p = PxSrcBGR[         y*ImgW + x ];
-			Px = Px_Original = BGRAf_FromBGRA8(&p);
+			Px_Original = BGRAf_FromBGRA8(&p);
+			Px_Original = BGRAf_AsYCoCg(&Px_Original);
+			Px = Px_Original;
 		}
 #if DITHER_TYPE != DITHER_NONE
 # if DITHER_TYPE == DITHER_FLOYDSTEINBERG
@@ -165,7 +166,10 @@ static struct BGRAf_t ProcessImage(
 	//! NOTE: This aliases over the original palette, but is
 	//! safe because BGRA8_t is smaller than BGRAf_t
 	struct BGRA8_t *PalBGR = (struct BGRA8_t*)Palette;
-	for(i=0;i<BMP_PALETTE_COLOURS;i++) PalBGR[i] = BGRA8_FromBGRAf(&Palette[i]);
+	for(i=0;i<BMP_PALETTE_COLOURS;i++) {
+		struct BGRAf_t x = BGRAf_FromYCoCg(&Palette[i]);
+		PalBGR[i] = BGRA8_FromBGRAf(&x);
+	}
 
 	//! Store new image data
 	if(Image->ColPal) {
