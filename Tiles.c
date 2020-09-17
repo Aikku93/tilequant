@@ -18,7 +18,7 @@
 //! Separated out from the main function as there is two
 //! paths (palettized, and direct) with identical code
 //! except for how the pixels are fetched.
-static inline __attribute__((always_inline)) void ConvertToTiles(
+static inline void ConvertToTiles(
 	struct TilesData_t *TilesData,
 	const struct BGRA8_t *PxBGR,
 	const        uint8_t *PxIdx,

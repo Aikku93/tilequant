@@ -25,7 +25,8 @@
 /**************************************/
 
 //! BMP file header
-struct __attribute__((packed)) BMFH_t {
+#pragma pack(push,1)
+struct BMFH_t {
 	uint16_t Type;
 	uint32_t Size;
 	uint16_t r1[2];
@@ -33,7 +34,7 @@ struct __attribute__((packed)) BMFH_t {
 };
 
 //! BMP image header
-struct __attribute__((packed)) BMIH_t {
+struct BMIH_t {
 	uint32_t Size;
 	uint32_t Width;
 	uint32_t Height;
@@ -46,6 +47,7 @@ struct __attribute__((packed)) BMIH_t {
 	uint32_t ColUsed;
 	uint32_t ColImportant;
 };
+#pragma pack(pop)
 
 /**************************************/
 
@@ -113,10 +115,8 @@ int BmpCtx_FromFile(struct BmpCtx_t *Ctx, const char *Filename) {
 			int i;
 			for(i=0;i<nPx;i++) {
 				//! Read BGR
-				struct __attribute__((packed)) {
-					uint8_t b, g, r;
-				} Col;
-				fread(&Col, 1, sizeof(Col), File);
+				struct { uint8_t b, g, r; }  Col;
+				fread(&Col, 1, 3, File);
 
 				//! Store BGRA
 				PxBGR[i].b = Col.b;
