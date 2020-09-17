@@ -148,7 +148,7 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
 		int ClusterChanges = 0;
 		for(i=0;i<nData;i++) {
 			int   BestIdx  = -1;
-			float BestDist = 0x1.0p126;
+			float BestDist = 8.0e37f; //! Arbitrarily large number
 			for(j=0;j<nCluster;j++) {
 				float Dist = BGRAf_ColDistance(&Data[i], &Clusters[j].Centroid);
 				if(Dist < BestDist) BestIdx = j, BestDist = Dist;
