@@ -18,7 +18,7 @@ endif
 
 dll:
 	mkdir -p release
-	gcc -c -lm -O2 -Wall -Wextra Bitmap.c Quantize.c Qualetize.c Tiles.c tilequantDLL.c -DDECLSPEC="$(DDECLSPEC)"
+	gcc -c -lm -O2 -Wall -fPIC -Wextra Bitmap.c Quantize.c Qualetize.c Tiles.c tilequantDLL.c -DDECLSPEC="$(DDECLSPEC)"
 	gcc -shared -o release/$(TARGET) tilequantDLL.o Bitmap.o Quantize.o Qualetize.o Tiles.o
 
 .PHONY: clean
