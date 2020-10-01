@@ -5,8 +5,7 @@
 /**************************************/
 
 struct QuantCluster_t {
-	int   Prev;
-	float ColourDist;
+	int Prev;
 	struct BGRAf_t Centroid;
 	struct BGRAf_t Train;
 	struct BGRAf_t TrainWeight;
