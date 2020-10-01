@@ -15,8 +15,10 @@
 //! Dither settings
 //! NOTE: Ordered dithering gives consistent tiled results, but Floyd-Steinberg can look nicer.
 //!       Recommend dither level of 0.5 for ordered, and 1.0 for Floyd-Steinberg.
-#define DITHER_LEVEL 0.5f
+//! NOTE: DITHER_NO_ALPHA disables dithering on the alpha channel.
 #define DITHER_TYPE  DITHER_ORDERED(3)
+#define DITHER_LEVEL 0.5f
+#define DITHER_NO_ALPHA
 
 //! When not zero, the PSNR for each channel will be displayed
 #define MEASURE_PSNR 1
@@ -79,14 +81,23 @@ struct BGRAf_t Qualetize(
 		for(n=PalUnused;n<MaxPalSize;n++) Mean = BGRAf_Add(&Mean, &Palette[i*MaxPalSize+n]);
 		Mean = BGRAf_Divi(&Mean, MaxPalSize-PalUnused);
 
-		//! Compute the average slopes and store to the palette spread
-		struct BGRAf_t Spread = (struct BGRAf_t){0,0,0,0};
+		//! Compute slopes and store to the palette spread
+		//! NOTE: For some reason, it works better to use the square root as a weight.
+		//! This probably gives a value somewhere between the arithmetic mean and
+		//! the smooth-max, which should result in better quality.
+		struct BGRAf_t Spread = {0,0,0,0}, SpreadW = {0,0,0,0};
 		for(n=PalUnused;n<MaxPalSize;n++) {
 			struct BGRAf_t d = BGRAf_Sub(&Palette[i*MaxPalSize+n], &Mean);
-			d = BGRAf_Abs(&d);
-			Spread = BGRAf_Add(&Spread, &d);
+			               d = BGRAf_Abs(&d);
+			struct BGRAf_t w = BGRAf_Sqrt(&d);
+			               d = BGRAf_Mul(&d, &w);
+			Spread  = BGRAf_Add(&Spread,  &d);
+			SpreadW = BGRAf_Add(&SpreadW, &w);
 		}
-		PaletteSpread[i] = BGRAf_Divi(&Spread, MaxPalSize-PalUnused);
+		PaletteSpread[i] = BGRAf_DivSafe(&Spread, &SpreadW, NULL);
+#ifdef DITHER_NO_ALPHA
+		PaletteSpread[i].a = 0.0f;
+#endif
 	}
 # endif
 #endif
@@ -107,6 +118,9 @@ struct BGRAf_t Qualetize(
 		//! Adjust for diffusion error
 		{
 			struct BGRAf_t Dif = PxDiffuse[y*ImgW + x];
+#ifdef DITHER_NO_ALPHA
+			Dif.a = 0.0f;
+#endif
 			Dif = BGRAf_Muli(&Dif, DITHER_LEVEL);
 			Px  = BGRAf_Add (&Px, &Dif);
 		}
