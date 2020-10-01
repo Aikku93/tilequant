@@ -49,17 +49,17 @@ static inline struct BGRAf_t BGRAf_FromBGRA8(const struct BGRA8_t *x) {
 static inline struct BGRAf_t BGRAf_AsYCoCg(const struct BGRAf_t *x) {
 	return (struct BGRAf_t){
 		( x->r + 2*x->g + x->b) * 0.25f,
-		(-x->r + 2*x->g - x->b) * 0.50f,
-		( x->r          - x->b) * 1.00f,
+		(-x->r + 2*x->g - x->b) * 0.25f,
+		( x->r          - x->b) * 0.50f,
 		( x->a                ) * 1.00f
 	};
 }
 
 static inline struct BGRAf_t BGRAf_FromYCoCg(const struct BGRAf_t *x) {
 	return (struct BGRAf_t){
-		x->b - 0.5f*(x->g + x->r),
-		x->b + 0.5f*(x->g       ),
-		x->b - 0.5f*(x->g - x->r),
+		x->b - x->g - x->r,
+		x->b + x->g,
+		x->b - x->g + x->r,
 		x->a
 	};
 }
@@ -136,6 +136,9 @@ static inline struct BGRAf_t BGRAf_Div(const struct BGRAf_t *a, const struct BGR
 }
 
 static inline struct BGRAf_t BGRAf_DivSafe(const struct BGRAf_t *a, const struct BGRAf_t *b, const struct BGRAf_t *DivByZeroValue) {
+	static const struct BGRAf_t Zero = {0,0,0,0};
+	if(!DivByZeroValue) DivByZeroValue = &Zero;
+
 	struct BGRAf_t Out;
 	Out.b = (b->b == 0.0f) ? DivByZeroValue->b : (a->b / b->b);
 	Out.g = (b->g == 0.0f) ? DivByZeroValue->g : (a->g / b->g);
