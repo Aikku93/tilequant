@@ -59,8 +59,8 @@ int main(int argc, const char *argv[]) {
 		return -1;
 	}
 	struct BGRAf_t RMSE = Qualetize(
-	        &Image, TilesData, PxData, Palette, MaxTilePals, MaxPalSize, PALUNUSED, DITHER_ORDERED(3), 1
-    );
+			&Image, TilesData, PxData, Palette, MaxTilePals, MaxPalSize, PALUNUSED, DITHER_ORDERED(3), 1
+	);
 	free(TilesData);
 
 	//! Output PSNR

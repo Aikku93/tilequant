@@ -32,7 +32,7 @@ struct BGRAf_t Qualetize(
 	int MaxTilePals,
 	int MaxPalSize,
 	int PalUnused,
-    int DitherType,
+	int DitherType,
 	int ReplaceImage
 );
 

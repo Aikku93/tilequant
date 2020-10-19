@@ -60,14 +60,14 @@ DECLSPEC int QualetizeFromRawImage(
 	struct TilesData_t *TilesData = TilesData_FromBitmap(&Ctx, TileW, TileH, (const struct BGRA8_t*)BitRange);
 	if(!TilesData) return 0;
 	(void)Qualetize(
-	        &Ctx, TilesData, DstPxIdx, (struct BGRAf_t*)DstPal, nPalettes, nColoursPerPalette,
-            nUnusedColoursPerPalette, DitherMode, 0
-    );
+			&Ctx, TilesData, DstPxIdx, (struct BGRAf_t*)DstPal, nPalettes, nColoursPerPalette,
+			nUnusedColoursPerPalette, DitherMode, 0
+	);
 
 	//! Store tile palette indices
 	if(TilePalIdx) {
 		int i;
-		      int32_t *Dst = TilePalIdx;
+			  int32_t *Dst = TilePalIdx;
 		const int32_t *Src = TilesData->TilePalIdx;
 		for(i=0;i<(ImgWidth*ImgHeight)/(TileW*TileH);i++) *Dst++ = *Src++;
 	}
