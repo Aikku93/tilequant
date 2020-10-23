@@ -58,7 +58,9 @@ int main(int argc, const char *argv[]) {
 		BmpCtx_Destroy(&Image);
 		return -1;
 	}
-	struct BGRAf_t RMSE = Qualetize(&Image, TilesData, PxData, Palette, MaxTilePals, MaxPalSize, PALUNUSED, 1);
+	struct BGRAf_t RMSE = Qualetize(
+			&Image, TilesData, PxData, Palette, MaxTilePals, MaxPalSize, PALUNUSED, DITHER_ORDERED(3), 1
+	);
 	free(TilesData);
 
 	//! Output PSNR

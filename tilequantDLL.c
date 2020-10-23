@@ -21,6 +21,7 @@
 //!    NOTE: DstPal must have enough space to accomodate:
 //!     (struct BGRAf_t)[nPalettes * nColoursPerPalette]
 //!   TilePalIdx = NULL or int32_t[(Width*Height) / (TileW*TileH)]
+//!   DitherMode = Dither mode to use: 0 = DITHER_NONE, -1 = DITHER_FLOYDSTEINBERG, n = DITHER_ORDERED(n)
 //! OutputPaletteIs24bitRGB outputs RGB (byte order: {RR, GG, BB})
 //! colours without an alpha channel; the default is to output to
 //! BGRA (byte order: {BB, GG, RR, AA}).
@@ -41,7 +42,8 @@ DECLSPEC int QualetizeFromRawImage(
 	int      TileW,
 	int      TileH,
 	int32_t *TilePalIdx,
-	const uint8_t BitRange[4]
+	const uint8_t BitRange[4],
+	int      DitherMode
 ) {
 	//! Create image context
 	//! NOTE: 'const' violations in image data, but not modified so this is safe
@@ -57,12 +59,15 @@ DECLSPEC int QualetizeFromRawImage(
 	//! very wrong when Qualetize() tries to free the pointers.
 	struct TilesData_t *TilesData = TilesData_FromBitmap(&Ctx, TileW, TileH, (const struct BGRA8_t*)BitRange);
 	if(!TilesData) return 0;
-	(void)Qualetize(&Ctx, TilesData, DstPxIdx, (struct BGRAf_t*)DstPal, nPalettes, nColoursPerPalette, nUnusedColoursPerPalette, 0);
+	(void)Qualetize(
+			&Ctx, TilesData, DstPxIdx, (struct BGRAf_t*)DstPal, nPalettes, nColoursPerPalette,
+			nUnusedColoursPerPalette, DitherMode, 0
+	);
 
 	//! Store tile palette indices
 	if(TilePalIdx) {
 		int i;
-		      int32_t *Dst = TilePalIdx;
+			  int32_t *Dst = TilePalIdx;
 		const int32_t *Src = TilesData->TilePalIdx;
 		for(i=0;i<(ImgWidth*ImgHeight)/(TileW*TileH);i++) *Dst++ = *Src++;
 	}
