@@ -12,6 +12,10 @@
 #define TILE_H 8
 #define PALUNUSED 1 //! These will be filled with {0,0,0,0} but still be used for matching
 #define BITRANGE (const struct BGRA8_t){0x1F,0x1F,0x1F,0x01} //! None of these may be 0
+
+//! Default dither mode
+#define DITHER_TYPE DITHER_ORDERED(3)
+
 /**************************************/
 
 //! When not zero, the PSNR for each channel will be displayed
@@ -47,7 +51,7 @@ int main(int argc, const char *argv[]) {
 
 	//! Perform processing
 	//! NOTE: PxData and Palette will be assigned to image; do NOT destroy
-	struct TilesData_t *TilesData = TilesData_FromBitmap(&Image, TILE_W, TILE_H, &BITRANGE);
+	struct TilesData_t *TilesData = TilesData_FromBitmap(&Image, TILE_W, TILE_H);
 	       uint8_t     *PxData    = malloc(Image.Width * Image.Height * sizeof(uint8_t));
 	struct BGRAf_t     *Palette   = calloc(BMP_PALETTE_COLOURS, sizeof(struct BGRAf_t));
 	if(!TilesData || !PxData || !Palette) {
@@ -58,7 +62,9 @@ int main(int argc, const char *argv[]) {
 		BmpCtx_Destroy(&Image);
 		return -1;
 	}
-	struct BGRAf_t RMSE = Qualetize(&Image, TilesData, PxData, Palette, MaxTilePals, MaxPalSize, PALUNUSED, 1);
+	struct BGRAf_t RMSE = Qualetize(
+		&Image, TilesData, PxData, Palette, MaxTilePals, MaxPalSize, PALUNUSED, &BITRANGE, DITHER_TYPE, 1
+	);
 	free(TilesData);
 
 	//! Output PSNR
