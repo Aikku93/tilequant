@@ -70,7 +70,7 @@ DECLSPEC int QualetizeFromRawImage(
 		nUnusedColoursPerPalette,
 		(const struct BGRA8_t*)BitRange,
 		DitherMode,
-		DitherLevel
+		DitherLevel,
 		0
 	);
 
