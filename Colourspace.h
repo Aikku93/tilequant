@@ -14,10 +14,10 @@ struct BGRAf_t { float   b, g, r, a; };
 
 static inline struct BGRA8_t BGRA_FromBGRAf(const struct BGRAf_t *x, const struct BGRA8_t *Range) {
 	struct BGRA8_t Out;
-	Out.b = (uint8_t)COLOURSPACE_CLIP(lrintf(x->b*Range->b), 0, Range->b);
-	Out.g = (uint8_t)COLOURSPACE_CLIP(lrintf(x->g*Range->g), 0, Range->g);
-	Out.r = (uint8_t)COLOURSPACE_CLIP(lrintf(x->r*Range->r), 0, Range->r);
-	Out.a = (uint8_t)COLOURSPACE_CLIP(lrintf(x->a*Range->a), 0, Range->a);
+	Out.b = (uint8_t)COLOURSPACE_CLIP((x->b*Range->b + 0.5f), 0, Range->b);
+	Out.g = (uint8_t)COLOURSPACE_CLIP((x->g*Range->g + 0.5f), 0, Range->g);
+	Out.r = (uint8_t)COLOURSPACE_CLIP((x->r*Range->r + 0.5f), 0, Range->r);
+	Out.a = (uint8_t)COLOURSPACE_CLIP((x->a*Range->a + 0.5f), 0, Range->a);
 	return Out;
 }
 
