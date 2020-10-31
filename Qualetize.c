@@ -33,12 +33,13 @@ struct BGRAf_t Qualetize(
 	struct TilesData_t *TilesData,
 	uint8_t *PxData,
 	struct BGRAf_t *Palette,
-	int MaxTilePals,
-	int MaxPalSize,
-	int PalUnused,
+	int   MaxTilePals,
+	int   MaxPalSize,
+	int   PalUnused,
 	const struct BGRA8_t *BitRange,
-	int DitherType,
-	int ReplaceImage
+	int   DitherType,
+	float DitherLevel,
+	int   ReplaceImage
 ) {
 	int i;
 
@@ -91,6 +92,7 @@ struct BGRAf_t Qualetize(
 			//! NOTE: For some reason, it works better to use the square root as a weight.
 			//! This probably gives a value somewhere between the arithmetic mean and
 			//! the smooth-max, which should result in better quality.
+			//! NOTE: Pre-multiply by DitherLevel to remove a multiply from the main loop.
 			struct BGRAf_t Spread = {0,0,0,0}, SpreadW = {0,0,0,0};
 			for(n=PalUnused;n<MaxPalSize;n++) {
 				struct BGRAf_t d = BGRAf_Sub(&Palette[i*MaxPalSize+n], &Mean);
@@ -100,10 +102,11 @@ struct BGRAf_t Qualetize(
 				Spread  = BGRAf_Add(&Spread,  &d);
 				SpreadW = BGRAf_Add(&SpreadW, &w);
 			}
-			PaletteSpread[i] = BGRAf_DivSafe(&Spread, &SpreadW, NULL);
+			Spread = BGRAf_DivSafe(&Spread, &SpreadW, NULL);
 #ifdef DITHER_NO_ALPHA
-			PaletteSpread[i].a = 0.0f;
+			Spread.a = 0.0f;
 #endif
+			PaletteSpread[i] = BGRAf_Muli(&Spread, DitherLevel);
 		}
 	}
 
@@ -129,7 +132,7 @@ struct BGRAf_t Qualetize(
 #ifdef DITHER_NO_ALPHA
 				Dif.a = 0.0f;
 #endif
-				Dif = BGRAf_Muli(&Dif, DITHER_LEVEL);
+				Dif = BGRAf_Muli(&Dif, DitherLevel);
 				Px  = BGRAf_Add (&Px, &Dif);
 			} else {
 				//! Adjust for dither matrix
@@ -139,7 +142,7 @@ struct BGRAf_t Qualetize(
 					Threshold = Threshold*2 + (xKey & 1), xKey >>= 1;
 				} while(--Bit >= 0);
 				float fThres = Threshold * (1.0f / (1 << (2*DitherType))) - 0.5f;
-				struct BGRAf_t DitherVal = BGRAf_Muli(&PaletteSpread[PalIdx], fThres*DITHER_LEVEL);
+				struct BGRAf_t DitherVal = BGRAf_Muli(&PaletteSpread[PalIdx], fThres);
 				Px = BGRAf_Add(&Px, &DitherVal);
 			}
 		}
@@ -172,6 +175,8 @@ struct BGRAf_t Qualetize(
 		}
 #if MEASURE_PSNR
 		//! Accumulate squared error
+		//! NOTE: Accumulate in BGRA, as this is more meaningful.
+		Error = BGRAf_FromYCoCg(&Error);
 		Error = BGRAf_Mul(&Error, &Error);
 		RMSE  = BGRAf_Add(&RMSE, &Error);
 #endif
