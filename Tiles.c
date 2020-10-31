@@ -6,8 +6,8 @@
 #include "Quantize.h"
 #include "Tiles.h"
 /**************************************/
-#define MAX_PALETTE_INDICES_PASSES      16
-#define MAX_PALETTE_QUANTIZATION_PASSES 16
+#define MAX_PALETTE_INDICES_PASSES      32
+#define MAX_PALETTE_QUANTIZATION_PASSES 32
 /**************************************/
 #define ALIGN2N(x,N) (((x) + (N)-1) &~ ((N)-1))
 #define DATA_ALIGNMENT 32
@@ -25,8 +25,7 @@ static inline void ConvertToTiles(
 	int TileW,
 	int TileH,
 	int nTileX,
-	int nTileY,
-	const struct BGRA8_t *BitRange
+	int nTileY
 ) {
 	int tx, ty, px, py;
 	union TilePx_t *TilePxPtr = TilesData->TilePxPtr;
@@ -42,12 +41,8 @@ static inline void ConvertToTiles(
 				if(PxIdx) pBGR = PxBGR[PxIdx[(ty*TileH+py)*(nTileX*TileW) + (tx*TileW+px)]];
 				else      pBGR = PxBGR[      (ty*TileH+py)*(nTileX*TileW) + (tx*TileW+px) ];
 
-				//! Convert range and store pixel
-				pBGR.b = pBGR.b*(BitRange->b+1)/256;
-				pBGR.g = pBGR.g*(BitRange->g+1)/256;
-				pBGR.r = pBGR.r*(BitRange->r+1)/256;
-				pBGR.a = pBGR.a*(BitRange->a+1)/256;
-				struct BGRAf_t Px = BGRAf_FromBGRA(&pBGR, BitRange);
+				//! Store pixel and add to analysis
+				struct BGRAf_t Px = BGRAf_FromBGRA8(&pBGR);
 				Px = BGRAf_AsYCoCg(&Px);
 				PxData[py*TileW+px] = Px;
 				Sum = BGRAf_Add(&Sum, &Px);
@@ -56,21 +51,20 @@ static inline void ConvertToTiles(
 		}
 
 		//! Finally, get the value of this tile by the weighted mean
-		//! of its pixels, with the weights being equivalent to the
-		//! squared distance from the mean (plus bias). This should
-		//! place the value as the average of the extrema.
+		//! of its pixels, with the weights being 1-Dist to the mean.
 		//! This is one of the most critical criteria for good palettization
 		struct BGRAf_t Value; {
 			struct BGRAf_t Sum = {0,0,0,0}, SumW = {0,0,0,0};
 			for(py=0;py<TileH;py++) for(px=0;px<TileW;px++) {
 				struct BGRAf_t Px = PxData[py*TileW+px];
-				struct BGRAf_t w  = BGRAf_Sub(&Px, &Mean);
-					       w  = BGRAf_Abs(&w);
-					       Px = BGRAf_Mul(&Px, &w);
+				struct BGRAf_t w  = BGRAf_Sub (&Px, &Mean);
+					       w  = BGRAf_Abs (&w);
+					       w  = BGRAf_Subi(&w, 1.0f); //! Technically should be 1-w, but used as weight so sign doesn't matter
+					       Px = BGRAf_Mul (&Px, &w);
 				Sum  = BGRAf_Add(&Sum,  &Px);
 				SumW = BGRAf_Add(&SumW, &w);
 			}
-			Value = BGRAf_DivSafe(&Sum, &SumW, &Mean);
+			Value = BGRAf_Div(&Sum, &SumW);
 		}
 
 		//! Store value and move to next tile
@@ -83,7 +77,7 @@ static inline void ConvertToTiles(
 /**************************************/
 
 //! Convert bitmap to tiles
-struct TilesData_t *TilesData_FromBitmap(const struct BmpCtx_t *Ctx, int TileW, int TileH, const struct BGRA8_t *BitRange) {
+struct TilesData_t *TilesData_FromBitmap(const struct BmpCtx_t *Ctx, int TileW, int TileH) {
 	//! Allocate memory for tiles
 	int nPx    = Ctx->Width * Ctx->Height;
 	int nTileX = (Ctx->Width  / TileW);
@@ -114,8 +108,8 @@ struct TilesData_t *TilesData_FromBitmap(const struct BmpCtx_t *Ctx, int TileW, 
 	TilesData->TilePalIdx = (int32_t       *)DATA_ALIGN(TilesData->PxTempIdx + nPx);
 
 	//! Fill tiles
-	if(Ctx->ColPal) ConvertToTiles(TilesData, Ctx->ColPal, Ctx->PxIdx, TileW, TileH, nTileX, nTileY, BitRange);
-	else            ConvertToTiles(TilesData, Ctx->PxBGR,  NULL,       TileW, TileH, nTileX, nTileY, BitRange);
+	if(Ctx->ColPal) ConvertToTiles(TilesData, Ctx->ColPal, Ctx->PxIdx, TileW, TileH, nTileX, nTileY);
+	else            ConvertToTiles(TilesData, Ctx->PxBGR,  NULL,       TileW, TileH, nTileX, nTileY);
 
 	//! Return tiles array
 	return TilesData;

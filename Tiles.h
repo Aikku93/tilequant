@@ -28,7 +28,7 @@ struct TilesData_t {
 
 //! Convert bitmap to tiles
 //! NOTE: To destroy, call free() on the returned pointer
-struct TilesData_t *TilesData_FromBitmap(const struct BmpCtx_t *Ctx, int TileW, int TileH, const struct BGRA8_t *BitRange);
+struct TilesData_t *TilesData_FromBitmap(const struct BmpCtx_t *Ctx, int TileW, int TileH);
 
 //! Create quantized palette
 //! NOTE: PalUnusedEntries is used for 'padding', such as on
