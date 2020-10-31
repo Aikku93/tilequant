@@ -7,19 +7,6 @@
 #include "Tiles.h"
 /**************************************/
 
-//! Dither modes available
-#define DITHER_NONE           ( 0) //! No dither
-#define DITHER_ORDERED(n)     ( n) //! Ordered dithering (Kernel size: (2^n) x (2^n))
-#define DITHER_FLOYDSTEINBERG (-1) //! Floyd-Steinberg (diffusion)
-
-//! Dither settings
-//! NOTE: Ordered dithering gives consistent tiled results, but Floyd-Steinberg can look nicer.
-//!       Recommend dither level of 0.5 for ordered, and 1.0 for Floyd-Steinberg.
-//! NOTE: DITHER_NO_ALPHA disables dithering on the alpha channel.
-#define DITHER_TYPE  DITHER_ORDERED(3)
-#define DITHER_LEVEL 0.5f
-#define DITHER_NO_ALPHA
-
 //! When not zero, the PSNR for each channel will be displayed
 #define MEASURE_PSNR 1
 
@@ -49,6 +36,8 @@ struct BGRAf_t Qualetize(
 	int MaxTilePals,
 	int MaxPalSize,
 	int PalUnused,
+	const struct BGRA8_t *BitRange,
+	int DitherType,
 	int ReplaceImage
 ) {
 	int i;
@@ -56,7 +45,23 @@ struct BGRAf_t Qualetize(
 	//! Do processing
 	TilesData_QuantizePalettes(TilesData, Palette, MaxTilePals, MaxPalSize, PalUnused);
 
-	//! Convert pixels to palettized
+	//! Reduce palette range
+	{
+		struct BGRAf_t DitherVal = BGRAf_FromBGRA(&(const struct BGRA8_t){1,1,1,0}, BitRange);
+		DitherVal = BGRAf_Muli(&DitherVal, 0.25f);
+		for(i=0;i<MaxTilePals*MaxPalSize;i++) {
+			struct BGRAf_t p = BGRAf_FromYCoCg(&Palette[i]);
+
+			//! Apply dithering bias to every second colour
+			if(i&1) p = BGRAf_Add(&p, &DitherVal);
+
+			struct BGRA8_t p2 = BGRA_FromBGRAf(&p, BitRange);
+			p = BGRAf_FromBGRA(&p2, BitRange);
+			Palette[i] = BGRAf_AsYCoCg(&p);
+		}
+	}
+
+	//! Get parameters, pointers, etc.
 	int x, y;
 	int ImgW = Image->Width;
 	int ImgH = Image->Height;
@@ -68,39 +73,41 @@ struct BGRAf_t Qualetize(
 #endif
 	const        uint8_t *PxSrcIdx = Image->ColPal ? Image->PxIdx  : NULL;
 	const struct BGRA8_t *PxSrcBGR = Image->ColPal ? Image->ColPal : Image->PxBGR;
-#if DITHER_TYPE != DITHER_NONE
-# if DITHER_TYPE == DITHER_FLOYDSTEINBERG
-	struct BGRAf_t *PxDiffuse = TilesData->PxData;
-	for(y=0;y<ImgH;y++) for(x=0;x<ImgW;x++) PxDiffuse[y*ImgW+x] = (struct BGRAf_t){0,0,0,0};
-# else
-	struct BGRAf_t *PaletteSpread = TilesData->PxData;
-	for(i=0;i<MaxTilePals;i++) {
-		//! Find the mean values of this palette
-		int n;
-		struct BGRAf_t Mean = (struct BGRAf_t){0,0,0,0};
-		for(n=PalUnused;n<MaxPalSize;n++) Mean = BGRAf_Add(&Mean, &Palette[i*MaxPalSize+n]);
-		Mean = BGRAf_Divi(&Mean, MaxPalSize-PalUnused);
 
-		//! Compute slopes and store to the palette spread
-		//! NOTE: For some reason, it works better to use the square root as a weight.
-		//! This probably gives a value somewhere between the arithmetic mean and
-		//! the smooth-max, which should result in better quality.
-		struct BGRAf_t Spread = {0,0,0,0}, SpreadW = {0,0,0,0};
-		for(n=PalUnused;n<MaxPalSize;n++) {
-			struct BGRAf_t d = BGRAf_Sub(&Palette[i*MaxPalSize+n], &Mean);
-			               d = BGRAf_Abs(&d);
-			struct BGRAf_t w = BGRAf_Sqrt(&d);
-			               d = BGRAf_Mul(&d, &w);
-			Spread  = BGRAf_Add(&Spread,  &d);
-			SpreadW = BGRAf_Add(&SpreadW, &w);
-		}
-		PaletteSpread[i] = BGRAf_DivSafe(&Spread, &SpreadW, NULL);
+	//! Initialize dither patterns
+	struct BGRAf_t *PxDiffuse     = TilesData->PxData; //! DITHER_FLOYDSTEINBERG only
+	struct BGRAf_t *PaletteSpread = TilesData->PxData; //! DITHER_ORDERED only
+	if(DitherType != DITHER_NONE) {
+		if(DitherType == DITHER_FLOYDSTEINBERG) {
+			for(y=0;y<ImgH;y++) for(x=0;x<ImgW;x++) PxDiffuse[y*ImgW+x] = (struct BGRAf_t){0,0,0,0};
+		} else for(i=0;i<MaxTilePals;i++) {
+			//! Find the mean values of this palette
+			int n;
+			struct BGRAf_t Mean = (struct BGRAf_t){0,0,0,0};
+			for(n=PalUnused;n<MaxPalSize;n++) Mean = BGRAf_Add(&Mean, &Palette[i*MaxPalSize+n]);
+			Mean = BGRAf_Divi(&Mean, MaxPalSize-PalUnused);
+
+			//! Compute slopes and store to the palette spread
+			//! NOTE: For some reason, it works better to use the square root as a weight.
+			//! This probably gives a value somewhere between the arithmetic mean and
+			//! the smooth-max, which should result in better quality.
+			struct BGRAf_t Spread = {0,0,0,0}, SpreadW = {0,0,0,0};
+			for(n=PalUnused;n<MaxPalSize;n++) {
+				struct BGRAf_t d = BGRAf_Sub(&Palette[i*MaxPalSize+n], &Mean);
+					       d = BGRAf_Abs(&d);
+				struct BGRAf_t w = BGRAf_Sqrt(&d);
+					       d = BGRAf_Mul(&d, &w);
+				Spread  = BGRAf_Add(&Spread,  &d);
+				SpreadW = BGRAf_Add(&SpreadW, &w);
+			}
+			PaletteSpread[i] = BGRAf_DivSafe(&Spread, &SpreadW, NULL);
 #ifdef DITHER_NO_ALPHA
-		PaletteSpread[i].a = 0.0f;
+			PaletteSpread[i].a = 0.0f;
 #endif
+		}
 	}
-# endif
-#endif
+
+	//! Convert pixels to palettized
 	for(y=0;y<ImgH;y++) for(x=0;x<ImgW;x++) {
 		int PalIdx = TilePalIdx[(y/TileH)*(ImgW/TileW) + (x/TileW)];
 
@@ -113,58 +120,56 @@ struct BGRAf_t Qualetize(
 			Px_Original = BGRAf_AsYCoCg(&Px_Original);
 			Px = Px_Original;
 		}
-#if DITHER_TYPE != DITHER_NONE
-# if DITHER_TYPE == DITHER_FLOYDSTEINBERG
-		//! Adjust for diffusion error
-		{
-			struct BGRAf_t Dif = PxDiffuse[y*ImgW + x];
+
+		//! Apply dithering?
+		if(DitherType != DITHER_NONE) {
+			if(DitherType == DITHER_FLOYDSTEINBERG) {
+				//! Adjust for diffusion error
+				struct BGRAf_t Dif = PxDiffuse[y*ImgW + x];
 #ifdef DITHER_NO_ALPHA
-			Dif.a = 0.0f;
+				Dif.a = 0.0f;
 #endif
-			Dif = BGRAf_Muli(&Dif, DITHER_LEVEL);
-			Px  = BGRAf_Add (&Px, &Dif);
+				Dif = BGRAf_Muli(&Dif, DITHER_LEVEL);
+				Px  = BGRAf_Add (&Px, &Dif);
+			} else {
+				//! Adjust for dither matrix
+				int Threshold = 0, xKey = x, yKey = x^y;
+				int Bit = DitherType-1; do {
+					Threshold = Threshold*2 + (yKey & 1), yKey >>= 1; //! <- Hopefully turned into "SHR, ADC"
+					Threshold = Threshold*2 + (xKey & 1), xKey >>= 1;
+				} while(--Bit >= 0);
+				float fThres = Threshold * (1.0f / (1 << (2*DitherType))) - 0.5f;
+				struct BGRAf_t DitherVal = BGRAf_Muli(&PaletteSpread[PalIdx], fThres*DITHER_LEVEL);
+				Px = BGRAf_Add(&Px, &DitherVal);
+			}
 		}
-# else
-		//! Adjust for dither matrix
-		{
-			int Threshold = 0, xKey = x, yKey = x^y;
-			int Bit = DITHER_TYPE-1; do {
-				Threshold = Threshold*2 + (yKey & 1), yKey >>= 1; //! <- Hopefully turned into "SHR, ADC"
-				Threshold = Threshold*2 + (xKey & 1), xKey >>= 1;
-			} while(--Bit >= 0);
-			float fThres = Threshold * (1.0f / (1 << (2*DITHER_TYPE))) - 0.5f;
-			struct BGRAf_t DitherVal = BGRAf_Muli(&PaletteSpread[PalIdx], fThres*DITHER_LEVEL);
-			Px = BGRAf_Add(&Px, &DitherVal);
-		}
-# endif
-#endif
-		//! Find matching palette entry and store
+
+		//! Find matching palette entry. Store and get the error
 		int PalCol = FindPaletteEntry(&Px, Palette + PalIdx*MaxPalSize, MaxPalSize, PalUnused);
 		PxData[y*ImgW + x] = PalIdx*MaxPalSize + PalCol;
-#if MEASURE_PSNR || DITHER_TYPE == DITHER_FLOYDSTEINBERG
 		struct BGRAf_t Error = BGRAf_Sub(&Px_Original, &Palette[PxData[y*ImgW + x]]);
-#endif
-#if DITHER_TYPE == DITHER_FLOYDSTEINBERG
+
 		//! Store error diffusion
-		if(y+1 < ImgH) {
-			if(x > 0) {
-				struct BGRAf_t t = BGRAf_Muli(&Error, 3.0f/16);
-				PxDiffuse[(y+1)*ImgW+(x-1)] = BGRAf_Add(&PxDiffuse[(y+1)*ImgW+(x-1)], &t);
-			}
-			if(1) {
-				struct BGRAf_t t = BGRAf_Muli(&Error, 5.0f/16);
-				PxDiffuse[(y+1)*ImgW+(x  )] = BGRAf_Add(&PxDiffuse[(y+1)*ImgW+(x  )], &t);
+		if(DitherType == DITHER_FLOYDSTEINBERG) {
+			if(y+1 < ImgH) {
+				if(x > 0) {
+					struct BGRAf_t t = BGRAf_Muli(&Error, 3.0f/16);
+					PxDiffuse[(y+1)*ImgW+(x-1)] = BGRAf_Add(&PxDiffuse[(y+1)*ImgW+(x-1)], &t);
+				}
+				if(1) {
+					struct BGRAf_t t = BGRAf_Muli(&Error, 5.0f/16);
+					PxDiffuse[(y+1)*ImgW+(x  )] = BGRAf_Add(&PxDiffuse[(y+1)*ImgW+(x  )], &t);
+				}
+				if(x+1 < ImgW) {
+					struct BGRAf_t t = BGRAf_Muli(&Error, 1.0f/16);
+					PxDiffuse[(y+1)*ImgW+(x+1)] = BGRAf_Add(&PxDiffuse[(y+1)*ImgW+(x+1)], &t);
+				}
 			}
 			if(x+1 < ImgW) {
-				struct BGRAf_t t = BGRAf_Muli(&Error, 1.0f/16);
-				PxDiffuse[(y+1)*ImgW+(x+1)] = BGRAf_Add(&PxDiffuse[(y+1)*ImgW+(x+1)], &t);
+					struct BGRAf_t t = BGRAf_Muli(&Error, 7.0f/16);
+					PxDiffuse[(y  )*ImgW+(x+1)] = BGRAf_Add(&PxDiffuse[(y  )*ImgW+(x+1)], &t);
 			}
 		}
-		if(x+1 < ImgW) {
-				struct BGRAf_t t = BGRAf_Muli(&Error, 7.0f/16);
-				PxDiffuse[(y  )*ImgW+(x+1)] = BGRAf_Add(&PxDiffuse[(y  )*ImgW+(x+1)], &t);
-		}
-#endif
 #if MEASURE_PSNR
 		//! Accumulate squared error
 		Error = BGRAf_Mul(&Error, &Error);
