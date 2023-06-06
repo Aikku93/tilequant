@@ -148,12 +148,16 @@ static inline struct BGRAf_t BGRAf_DivSafe(const struct BGRAf_t *a, const struct
 }
 
 static inline struct BGRAf_t BGRAf_Divi(const struct BGRAf_t *a, float b) {
+#if 0
 	struct BGRAf_t Out;
 	Out.b = a->b / b;
 	Out.g = a->g / b;
 	Out.r = a->r / b;
 	Out.a = a->a / b;
 	return Out;
+#else
+	return BGRAf_Muli(a, 1.0f / b);
+#endif
 }
 
 static inline struct BGRAf_t BGRAf_InvDivi(const struct BGRAf_t *a, float b) {
