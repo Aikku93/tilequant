@@ -5,12 +5,13 @@
 /**************************************/
 
 struct QuantCluster_t {
-	int Prev;
-	int nPoints;
-	struct BGRAf_t Centroid;
+	int   Next;
+	int   nPoints;
+	float TrainWeight;
+	float DistWeight;
 	struct BGRAf_t Train;
-	struct BGRAf_t DistCenter;
-	struct BGRAf_t DistWeight;
+	struct BGRAf_t Dist;
+	struct BGRAf_t Centroid;
 };
 
 /**************************************/

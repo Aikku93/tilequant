@@ -57,7 +57,7 @@ int main(int argc, const char *argv[]) {
 	int     nUnusedColoursPerPalette = 1;
 	int     TileW = 8;
 	int     TileH = 8;
-	uint8_t BitRange[4] = {0x1F,0x1F,0x1F,0x01};
+	struct BGRA8_t BitRange = {.b = 0x1F, .g = 0x1F, .r = 0x1F, .a = 0x01};
 	int     DitherMode  = DITHER_FLOYDSTEINBERG;
 	float   DitherLevel = 1.0f; {
 		int argi;
@@ -85,10 +85,10 @@ int main(int argc, const char *argv[]) {
 			//! BitRange
 			ARGMATCH(argv[argi], "-bgra:") {
 				ArgOk = 1;
-				BitRange[0] = (1 << (*ArgStr++ - '0')) - 1;
-				BitRange[1] = (1 << (*ArgStr++ - '0')) - 1;
-				BitRange[2] = (1 << (*ArgStr++ - '0')) - 1;
-				BitRange[3] = (1 << (*ArgStr++ - '0')) - 1;
+				BitRange.b = (1 << (*ArgStr++ - '0')) - 1;
+				BitRange.g = (1 << (*ArgStr++ - '0')) - 1;
+				BitRange.r = (1 << (*ArgStr++ - '0')) - 1;
+				BitRange.a = (1 << (*ArgStr++ - '0')) - 1;
 			}
 
 			//! DitherMode,DitherLevel
@@ -146,7 +146,7 @@ int main(int argc, const char *argv[]) {
 		return -1;
 	}
 	struct BGRAf_t RMSE = Qualetize(
-		&Image, TilesData, PxData, Palette, nPalettes, nColoursPerPalette, nUnusedColoursPerPalette, BitRange, DitherMode, DitherLevel, 1
+		&Image, TilesData, PxData, Palette, nPalettes, nColoursPerPalette, nUnusedColoursPerPalette, &BitRange, DitherMode, DitherLevel, 1
 	);
 	free(TilesData);
 

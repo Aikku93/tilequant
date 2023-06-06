@@ -6,8 +6,13 @@
 #include "Quantize.h"
 #include "Tiles.h"
 /**************************************/
-#define MAX_PALETTE_INDICES_PASSES      32
-#define MAX_PALETTE_QUANTIZATION_PASSES 32
+
+//! NOTE: Something is probably broken about how clustering is
+//! implemented. Sometimes results converge, and other times
+//! they /diverge/. This is why the number of passes is kept low.
+#define MAX_PALETTE_INDICES_PASSES      2
+#define MAX_PALETTE_QUANTIZATION_PASSES 2
+
 /**************************************/
 #define ALIGN2N(x,N) (((x) + (N)-1) &~ ((N)-1))
 #define DATA_ALIGNMENT 32
@@ -32,40 +37,31 @@ static inline void ConvertToTiles(
 	struct BGRAf_t *TileValue = TilesData->TileValue;
 	struct BGRAf_t *PxData    = TilesData->PxData;
 	for(ty=0;ty<nTileY;ty++) for(tx=0;tx<nTileX;tx++) {
-		//! Copy pixels and get the mean
-		struct BGRAf_t Mean; {
-			struct BGRAf_t Sum = {0,0,0,0};
-			for(py=0;py<TileH;py++) for(px=0;px<TileW;px++) {
-				//! Get original BGR pixel
-				struct BGRA8_t pBGR;
-				if(PxIdx) pBGR = PxBGR[PxIdx[(ty*TileH+py)*(nTileX*TileW) + (tx*TileW+px)]];
-				else      pBGR = PxBGR[      (ty*TileH+py)*(nTileX*TileW) + (tx*TileW+px) ];
+		//! Copy pixels as YCoCg
+		struct BGRAf_t Mean = {0,0,0,0};
+		struct BGRAf_t SoftMax = {0,0,0,0}, SoftMaxW = {0,0,0,0};
+		for(py=0;py<TileH;py++) for(px=0;px<TileW;px++) {
+			//! Get original BGR pixel
+			struct BGRA8_t pBGR;
+			if(PxIdx) pBGR = PxBGR[PxIdx[(ty*TileH+py)*(nTileX*TileW) + (tx*TileW+px)]];
+			else      pBGR = PxBGR[      (ty*TileH+py)*(nTileX*TileW) + (tx*TileW+px) ];
 
-				//! Store pixel and add to analysis
-				struct BGRAf_t Px = BGRAf_FromBGRA8(&pBGR);
-				Px = BGRAf_AsYCoCg(&Px);
-				PxData[py*TileW+px] = Px;
-				Sum = BGRAf_Add(&Sum, &Px);
-			}
-			Mean = BGRAf_Divi(&Sum, TileW*TileH);
-		}
+			//! Convert and store pixel
+			struct BGRAf_t Px = BGRAf_FromBGRA8(&pBGR);
+			PxData[py*TileW+px] = BGRAf_AsYCoCg(&Px);
+			Mean = BGRAf_Add(&Mean, &Px);
 
-		//! Finally, get the value of this tile by the weighted mean
-		//! of its pixels, with the weights being 1-Dist to the mean.
-		//! This is one of the most critical criteria for good palettization
-		struct BGRAf_t Value; {
-			struct BGRAf_t Sum = {0,0,0,0}, SumW = {0,0,0,0};
-			for(py=0;py<TileH;py++) for(px=0;px<TileW;px++) {
-				struct BGRAf_t Px = PxData[py*TileW+px];
-				struct BGRAf_t w  = BGRAf_Sub (&Px, &Mean);
-					       w  = BGRAf_Abs (&w);
-					       w  = BGRAf_Subi(&w, 1.0f); //! Technically should be 1-w, but used as weight so sign doesn't matter
-					       Px = BGRAf_Mul (&Px, &w);
-				Sum  = BGRAf_Add(&Sum,  &Px);
-				SumW = BGRAf_Add(&SumW, &w);
-			}
-			Value = BGRAf_Div(&Sum, &SumW);
+			//! Update the soft maximum
+			SoftMaxW = BGRAf_Add(&SoftMaxW, &Px);
+			Px       = BGRAf_Mul(&Px, &Px);
+			SoftMax  = BGRAf_Add(&SoftMax, &Px);
 		}
+		SoftMax = BGRAf_DivSafe(&SoftMax, &SoftMaxW, NULL);
+
+		//! Now get the tile value as the geometric mean of the arithmetic mean and the contraharmonic mean
+		//! NOTE: Scaling isn't important here.
+		//! NOTE: This seems to work better when kept squared.
+		struct BGRAf_t Value = BGRAf_Mul(&Mean, &SoftMax);
 
 		//! Store value and move to next tile
 		(TilePxPtr++)->PxBGRAf = PxData;
