@@ -10,8 +10,8 @@
 //! NOTE: Something is probably broken about how clustering is
 //! implemented. Sometimes results converge, and other times
 //! they /diverge/. This is why the number of passes is kept low.
-#define MAX_PALETTE_INDICES_PASSES      2
-#define MAX_PALETTE_QUANTIZATION_PASSES 2
+#define MAX_PALETTE_INDICES_PASSES      4
+#define MAX_PALETTE_QUANTIZATION_PASSES 4
 
 /**************************************/
 #define ALIGN2N(x,N) (((x) + (N)-1) &~ ((N)-1))
@@ -37,9 +37,9 @@ static inline void ConvertToTiles(
 	struct BGRAf_t *TileValue = TilesData->TileValue;
 	struct BGRAf_t *PxData    = TilesData->PxData;
 	for(ty=0;ty<nTileY;ty++) for(tx=0;tx<nTileX;tx++) {
-		//! Copy pixels as YCoCg
+		//! Copy pixels as YCoCg, and get mean + normalization factor
+		float Norm = 0.0f;
 		struct BGRAf_t Mean = {0,0,0,0};
-		struct BGRAf_t SoftMax = {0,0,0,0}, SoftMaxW = {0,0,0,0};
 		for(py=0;py<TileH;py++) for(px=0;px<TileW;px++) {
 			//! Get original BGR pixel
 			struct BGRA8_t pBGR;
@@ -49,23 +49,26 @@ static inline void ConvertToTiles(
 			//! Convert and store pixel
 			struct BGRAf_t Px = BGRAf_FromBGRA8(&pBGR);
 			PxData[py*TileW+px] = BGRAf_AsYCoCg(&Px);
-			Mean = BGRAf_Add(&Mean, &Px);
-
-			//! Update the soft maximum
-			SoftMaxW = BGRAf_Add(&SoftMaxW, &Px);
-			Px       = BGRAf_Mul(&Px, &Px);
-			SoftMax  = BGRAf_Add(&SoftMax, &Px);
+			Mean  = BGRAf_Add(&Mean, &Px);
+			Norm += Px.b + 2*Px.g + Px.r;
 		}
-		SoftMax = BGRAf_DivSafe(&SoftMax, &SoftMaxW, NULL);
 
-		//! Now get the tile value as the geometric mean of the arithmetic mean and the contraharmonic mean
-		//! NOTE: Scaling isn't important here.
-		//! NOTE: This seems to work better when kept squared.
-		struct BGRAf_t Value = BGRAf_Mul(&Mean, &SoftMax);
+		//! Now normalize the mean by the average luma (defined as b+2*g+r).
+		//! The idea here is to cluster the colour similarity excluding luma,
+		//! and then just let final palette quantization account for it.
+		//! Note that the alpha channels is just normalized as per usual,
+		//! because it is assumed that the input is pre-multiplied.
+		if(Norm) {
+			float InvNorm = 1.0f / sqrtf(Norm);
+			Mean.b *= InvNorm;
+			Mean.g *= InvNorm;
+			Mean.r *= InvNorm;
+			Mean.a /= (float)(TileW*TileH);
+		}
 
 		//! Store value and move to next tile
 		(TilePxPtr++)->PxBGRAf = PxData;
-		*TileValue++ = Value;
+		*TileValue++ = Mean;
 		PxData += TileW*TileH;
 	}
 }
