@@ -15,7 +15,7 @@ static inline void QuantCluster_Train(struct QuantCluster_t *Dst, const struct B
 	struct BGRAf_t Dist = BGRAf_Sub(Data, &Dst->Centroid);
 
 	float DistW  = BGRAf_Len2(&Dist);
-	float TrainW = DistW; //! <- This will help outliers pop out more often
+	float TrainW = 0.001f + DistW; //! <- This will help outliers pop out more often (must not be 0.0!)
 	struct BGRAf_t TrainData = BGRAf_Muli( Data, TrainW);
 	struct BGRAf_t DistData  = BGRAf_Muli(&Dist, DistW);
 	Dst->TrainWeight += TrainW, Dst->Train = BGRAf_Add(&Dst->Train, &TrainData);
