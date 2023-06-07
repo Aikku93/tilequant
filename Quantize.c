@@ -15,7 +15,7 @@ static inline void QuantCluster_Train(struct QuantCluster_t *Dst, const struct B
 	struct BGRAf_t Dist = BGRAf_Sub(Data, &Dst->Centroid);
 
 	float DistW  = BGRAf_Len2(&Dist);
-	float TrainW = 1.0f; //! <- This can probably be improved upon...
+	float TrainW = DistW; //! <- This will help outliers pop out more often
 	struct BGRAf_t TrainData = BGRAf_Muli( Data, TrainW);
 	struct BGRAf_t DistData  = BGRAf_Muli(&Dist, DistW);
 	Dst->TrainWeight += TrainW, Dst->Train = BGRAf_Add(&Dst->Train, &TrainData);
@@ -31,12 +31,12 @@ static inline int QuantCluster_Resolve(struct QuantCluster_t *x) {
 
 //! Split a quantization cluster
 static inline void QuantCluster_Split(struct QuantCluster_t *Clusters, int SrcCluster, int DstCluster, const struct BGRAf_t *Data, int nData, int32_t *DataClusters) {
+	//! Shift the cluster in either direction of the distortion vector
 	struct BGRAf_t Dist = BGRAf_Divi(&Clusters[SrcCluster].Dist, Clusters[SrcCluster].DistWeight);
-	Dist = BGRAf_Muli(&Dist, 2.5f); //! <- Intentionally overshoot to get a better fit
-
 	Clusters[DstCluster].Centroid = BGRAf_Add(&Clusters[SrcCluster].Centroid, &Dist);
-	//Clusters[SrcCluster].Centroid = BGRAf_Sub(&Clusters[SrcCluster].Centroid, &Dist);
+	Clusters[SrcCluster].Centroid = BGRAf_Sub(&Clusters[SrcCluster].Centroid, &Dist);
 
+	//! Re-assign clusters
 	int n;
 	QuantCluster_ClearTraining(&Clusters[SrcCluster]);
 	QuantCluster_ClearTraining(&Clusters[DstCluster]);
