@@ -47,18 +47,11 @@ struct BGRAf_t Qualetize(
 	TilesData_QuantizePalettes(TilesData, Palette, MaxTilePals, MaxPalSize, PalUnused);
 
 	//! Reduce palette range
-	//! NOTE: Adding a bias here seems to help
-	{
-		struct BGRAf_t Bias = BGRAf_FromBGRA(&(const struct BGRA8_t){1,1,1,0}, BitRange);
-		Bias = BGRAf_Muli(&Bias, 0.25f);
-		for(i=0;i<MaxTilePals*MaxPalSize;i++) {
-			struct BGRAf_t p = BGRAf_FromYCoCg(&Palette[i]);
-			p = BGRAf_Add(&p, &Bias);
-
-			struct BGRA8_t p2 = BGRA_FromBGRAf(&p, BitRange);
-			p = BGRAf_FromBGRA(&p2, BitRange);
-			Palette[i] = BGRAf_AsYCoCg(&p);
-		}
+	for(i=0;i<MaxTilePals*MaxPalSize;i++) {
+		struct BGRAf_t p = BGRAf_FromYCoCg(&Palette[i]);
+		struct BGRA8_t p2 = BGRA_FromBGRAf(&p, BitRange);
+		p = BGRAf_FromBGRA(&p2, BitRange);
+		Palette[i] = BGRAf_AsYCoCg(&p);
 	}
 
 	//! Get parameters, pointers, etc.
