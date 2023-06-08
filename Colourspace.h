@@ -44,8 +44,8 @@ static inline struct BGRAf_t BGRAf_FromBGRA8(const struct BGRA8_t *x) {
 /**************************************/
 
 //! x->b = Y
-//! x->g = Co
-//! x->r = Cg
+//! x->g = Cg
+//! x->r = Co
 static inline struct BGRAf_t BGRAf_AsYCoCg(const struct BGRAf_t *x) {
 	return (struct BGRAf_t){
 		( x->r + 2*x->g + x->b) * 0.25f,
