@@ -144,7 +144,10 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
 			for(i=0;i<nClusterCur;i++) {
 				//! If the cluster resolves, update the distortion linked list
 				if(QuantCluster_Resolve(&Clusters[i])) {
-					MaxDistCluster = QuantCluster_InsertToDistortionList(Clusters, i, MaxDistCluster);
+					//! Only insert to the list if the distortion is non-zero
+					if(Clusters[i].DistWeight != 0.0f) {
+						MaxDistCluster = QuantCluster_InsertToDistortionList(Clusters, i, MaxDistCluster);
+					}
 				} else {
 					//! No resolve - append to empty-cluster linked list
 					Clusters[i].Next = EmptyCluster, EmptyCluster = i;
