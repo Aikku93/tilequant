@@ -37,8 +37,7 @@ static inline void ConvertToTiles(
 	struct BGRAf_t *TileValue = TilesData->TileValue;
 	struct BGRAf_t *PxData    = TilesData->PxData;
 	for(ty=0;ty<nTileY;ty++) for(tx=0;tx<nTileX;tx++) {
-		//! Copy pixels as YCoCg, and get mean + normalization factor
-		float Norm = 0.0f;
+		//! Copy pixels as YCoCg, and get mean
 		struct BGRAf_t Mean = {0,0,0,0};
 		for(py=0;py<TileH;py++) for(px=0;px<TileW;px++) {
 			//! Get original BGR pixel
@@ -48,23 +47,29 @@ static inline void ConvertToTiles(
 
 			//! Convert and store pixel
 			struct BGRAf_t Px = BGRAf_FromBGRA8(&pBGR);
-			PxData[py*TileW+px] = BGRAf_AsYCoCg(&Px);
-			Mean  = BGRAf_Add(&Mean, &Px);
-			Norm += Px.b + 2*Px.g + Px.r;
+			Px = BGRAf_AsYCoCg(&Px);
+			PxData[py*TileW+px] = Px;
+			Mean = BGRAf_Add(&Mean, &Px);
 		}
 
-		//! Now normalize the mean by the average luma (defined as b+2*g+r).
-		//! The idea here is to cluster the colour similarity excluding luma,
-		//! and then just let final palette quantization account for it.
+		//! Now normalize the chroma values by the luma value, and normalize
+		//! the luma value to the mean for this tile.
+		//! The idea here is to cluster the colour similarity after adjusting
+		//! for luminosity (so that similar colours of different luminosities
+		//! will end up in the same palette), and then treat the luma as just
+		//! another dimension to optimize for.
 		//! Note that the alpha channels is just normalized as per usual,
 		//! because it is assumed that the input is pre-multiplied.
+		//! NOTE: Dividing by the square root of the luminosity improves PSNR;
+		//! I have no idea why this is the case, though.
+		float Norm = Mean.b;
 		if(Norm) {
 			float InvNorm = 1.0f / sqrtf(Norm);
-			Mean.b *= InvNorm;
 			Mean.g *= InvNorm;
 			Mean.r *= InvNorm;
-			Mean.a /= (float)(TileW*TileH);
 		}
+		Mean.b /= (float)(TileW*TileH);
+		Mean.a /= (float)(TileW*TileH);
 
 		//! Store value and move to next tile
 		(TilePxPtr++)->PxBGRAf = PxData;
