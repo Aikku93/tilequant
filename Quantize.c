@@ -105,7 +105,9 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
 		{
 			//! Setting N=1 uses iterative splitting (slow)
 			//! Setting N=nClusterCur uses binary splitting (faster)
-			int N = 1;
+			//! We use binary splitting, and just use more refinement passes,
+			//! as this is much faster for the same convergence rate.
+			int N = nClusterCur;
 			for(i=0;i<N;i++) {
 				//! If we already hit the maximum number of clusters, break out
 				if(nClusterCur >= nCluster) break;
