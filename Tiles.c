@@ -64,7 +64,10 @@ static inline void ConvertToTiles(
 		//! I have no idea why this is the case, though.
 		float Norm = Mean.b;
 		if(Norm) {
-			float InvNorm = 1.0f / sqrtf(Norm);
+			//! NOTE: Chroma values are scaled by 0.1 relative to luma and
+			//! alpha; this is to give 10x more importance to the latter,
+			//! and is used to fixe some edge cases with subtle details.
+			float InvNorm = 0.1f / sqrtf(Norm);
 			Mean.g *= InvNorm;
 			Mean.r *= InvNorm;
 		}
