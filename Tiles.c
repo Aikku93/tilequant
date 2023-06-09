@@ -9,9 +9,9 @@
 
 //! NOTE: Something is probably broken about how clustering is
 //! implemented. Sometimes results converge, and other times
-//! they /diverge/. This is why the number of passes is kept low.
-#define MAX_PALETTE_INDICES_PASSES      4
-#define MAX_PALETTE_QUANTIZATION_PASSES 4
+//! they /diverge/. This probably needs to be investigated.
+#define MAX_PALETTE_INDICES_PASSES      8
+#define MAX_PALETTE_QUANTIZATION_PASSES 8
 
 /**************************************/
 #define ALIGN2N(x,N) (((x) + (N)-1) &~ ((N)-1))
