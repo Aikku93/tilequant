@@ -43,6 +43,8 @@ DECLSPEC int QualetizeFromRawImage(
 	int      TileW,
 	int      TileH,
 	int32_t *TilePalIdx,
+	int      nTileClusterPasses,
+	int      nColourClusterPasses,
 	const uint8_t BitRange[4],
 	int           DitherMode,
 	float         DitherLevel
@@ -68,6 +70,8 @@ DECLSPEC int QualetizeFromRawImage(
 		nPalettes,
 		nColoursPerPalette,
 		nUnusedColoursPerPalette,
+		nTileClusterPasses,
+		nColourClusterPasses,
 		(const struct BGRA8_t*)BitRange,
 		DitherMode,
 		DitherLevel,

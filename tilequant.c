@@ -38,6 +38,8 @@ int main(int argc, const char *argv[]) {
 			" -th:8             - Set tile height\n"
 			" -bgra:5551        - Set BGRA bit depth\n"
 			" -dither:floyd,1.0 - Set dither mode, level\n"
+			" -tilepasses:0     - Set tile cluster passes (0 = default)\n"
+			" -colourpasses:0   - Set colour cluster passes (0 = default)\n"
 			"Dither modes available (and default level):\n"
 			" -dither:none       - No dithering\n"
 			" -dither:floyd,1.0  - Floyd-Steinberg\n"
@@ -55,6 +57,8 @@ int main(int argc, const char *argv[]) {
 	int     nPalettes = 16;
 	int     nColoursPerPalette = 16;
 	int     nUnusedColoursPerPalette = 1;
+	int     nTileClusterPasses   = 0;
+	int     nColourClusterPasses = 0;
 	int     TileW = 8;
 	int     TileH = 8;
 	struct BGRA8_t BitRange = {.b = 0x1F, .g = 0x1F, .r = 0x1F, .a = 0x01};
@@ -113,8 +117,19 @@ int main(int argc, const char *argv[]) {
 				if(!ArgOk) printf("Unrecognized dither mode: %s\n", ArgStr);
 				ArgOk = 1;
 			}
-#undef ARGMATCH
 
+			//! nTileClusterPasses
+			ARGMATCH(argv[argi], "-tilepasses:") {
+				ArgOk = 1;
+				nTileClusterPasses = atoi(ArgStr);
+			}
+
+			//! nColourClusterPasses
+			ARGMATCH(argv[argi], "-colourpasses:") {
+				ArgOk = 1;
+				nColourClusterPasses = atoi(ArgStr);
+			}
+#undef ARGMATCH
 			//! Unrecognized?
 			if(!ArgOk) printf("Unrecognized argument: %s\n", ArgStr);
 		}
@@ -146,7 +161,19 @@ int main(int argc, const char *argv[]) {
 		return -1;
 	}
 	struct BGRAf_t RMSE = Qualetize(
-		&Image, TilesData, PxData, Palette, nPalettes, nColoursPerPalette, nUnusedColoursPerPalette, &BitRange, DitherMode, DitherLevel, 1
+		&Image,
+		TilesData,
+		PxData,
+		Palette,
+		nPalettes,
+		nColoursPerPalette,
+		nUnusedColoursPerPalette,
+		nTileClusterPasses,
+		nColourClusterPasses,
+		&BitRange,
+		DitherMode,
+		DitherLevel,
+		1
 	);
 	free(TilesData);
 

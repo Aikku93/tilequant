@@ -10,8 +10,8 @@
 //! NOTE: Something is probably broken about how clustering is
 //! implemented. Sometimes results converge, and other times
 //! they /diverge/. This probably needs to be investigated.
-#define MAX_PALETTE_INDICES_PASSES      8
-#define MAX_PALETTE_QUANTIZATION_PASSES 8
+#define DEFAULT_TILECLUSTER_PASSES   8
+#define DEFAULT_COLOURCLUSTER_PASSES 8
 
 /**************************************/
 #define ALIGN2N(x,N) (((x) + (N)-1) &~ ((N)-1))
@@ -125,10 +125,22 @@ struct TilesData_t *TilesData_FromBitmap(const struct BmpCtx_t *Ctx, int TileW, 
 /**************************************/
 
 //! Create quantized palette
-int TilesData_QuantizePalettes(struct TilesData_t *TilesData, struct BGRAf_t *Palette, int MaxTilePals, int MaxPalSize, int PalUnusedEntries) {
+int TilesData_QuantizePalettes(
+	struct TilesData_t *TilesData,
+	struct BGRAf_t *Palette,
+	int MaxTilePals,
+	int MaxPalSize,
+	int PalUnusedEntries,
+	int nTileClusterPasses,
+	int nColourClusterPasses
+) {
 	int i, j, k;
 	int nPxTile = TilesData->TileW  * TilesData->TileH;
 	int nTiles  = TilesData->TilesX * TilesData->TilesY;
+
+	//! Set default passes as needed
+	if(nTileClusterPasses   == 0) nTileClusterPasses   = DEFAULT_TILECLUSTER_PASSES;
+	if(nColourClusterPasses == 0) nColourClusterPasses = DEFAULT_COLOURCLUSTER_PASSES;
 
 	//! Unused entries should not count towards
 	//! the maximum palette size
@@ -143,7 +155,7 @@ int TilesData_QuantizePalettes(struct TilesData_t *TilesData, struct BGRAf_t *Pa
 	}
 
 	//! Categorize tiles by palette
-	QuantCluster_Quantize(Clusters, MaxTilePals, TilesData->TileValue, nTiles, TilesData->TilePalIdx, MAX_PALETTE_INDICES_PASSES);
+	QuantCluster_Quantize(Clusters, MaxTilePals, TilesData->TileValue, nTiles, TilesData->TilePalIdx, nTileClusterPasses);
 
 	//! Quantize tile palettes
 	for(i=0;i<MaxTilePals;i++) {
@@ -161,7 +173,7 @@ int TilesData_QuantizePalettes(struct TilesData_t *TilesData, struct BGRAf_t *Pa
 		if(!PxCnt) continue;
 
 		//! Perform quantization
-		QuantCluster_Quantize(Clusters, MaxPalSize, PxTemp, PxCnt, TilesData->PxTempIdx, MAX_PALETTE_QUANTIZATION_PASSES);
+		QuantCluster_Quantize(Clusters, MaxPalSize, PxTemp, PxCnt, TilesData->PxTempIdx, nColourClusterPasses);
 
 		//! Extract palette from cluster centroids
 		for(j=0;j<PalUnusedEntries;j++) *Palette++ = (struct BGRAf_t){0,0,0,0};

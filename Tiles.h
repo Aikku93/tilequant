@@ -34,7 +34,15 @@ struct TilesData_t *TilesData_FromBitmap(const struct BmpCtx_t *Ctx, int TileW, 
 //! NOTE: PalUnusedEntries is used for 'padding', such as on
 //! the GBA/NDS where index 0 of every palette is transparent
 //! NOTE: Palette is generated in YUVA mode
-int TilesData_QuantizePalettes(struct TilesData_t *TilesData, struct BGRAf_t *Palette, int MaxTilePals, int MaxPalSize, int PalUnusedEntries);
+int TilesData_QuantizePalettes(
+	struct TilesData_t *TilesData,
+	struct BGRAf_t *Palette,
+	int MaxTilePals,
+	int MaxPalSize,
+	int PalUnusedEntries,
+	int nTileClusterPasses,
+	int nColourClusterPasses
+);
 
 /**************************************/
 //! EOF

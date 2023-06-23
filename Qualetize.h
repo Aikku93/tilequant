@@ -29,6 +29,8 @@ struct BGRAf_t Qualetize(
 	int   MaxTilePals,
 	int   MaxPalSize,
 	int   PalUnused,
+	int   nTileClusterPasses,
+	int   nColourClusterPasses,
 	const struct BGRA8_t *BitRange,
 	int   DitherType,
 	float DitherLevel,

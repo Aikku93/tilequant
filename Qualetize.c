@@ -36,6 +36,8 @@ struct BGRAf_t Qualetize(
 	int   MaxTilePals,
 	int   MaxPalSize,
 	int   PalUnused,
+	int   nTileClusterPasses,
+	int   nColourClusterPasses,
 	const struct BGRA8_t *BitRange,
 	int   DitherType,
 	float DitherLevel,
@@ -44,7 +46,15 @@ struct BGRAf_t Qualetize(
 	int i;
 
 	//! Do processing
-	TilesData_QuantizePalettes(TilesData, Palette, MaxTilePals, MaxPalSize, PalUnused);
+	TilesData_QuantizePalettes(
+		TilesData,
+		Palette,
+		MaxTilePals,
+		MaxPalSize,
+		PalUnused,
+		nTileClusterPasses,
+		nColourClusterPasses
+	);
 
 	//! Reduce palette range
 	for(i=0;i<MaxTilePals*MaxPalSize;i++) {
