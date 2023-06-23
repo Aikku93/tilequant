@@ -15,7 +15,7 @@ static inline void QuantCluster_Train(struct QuantCluster_t *Dst, const struct B
 	struct BGRAf_t Dist = BGRAf_Sub(Data, &Dst->Centroid);
 
 	float DistW  = BGRAf_Len2(&Dist);
-	float TrainW = 0.001f + DistW; //! <- This will help outliers pop out more often (must not be 0.0!)
+	float TrainW = 0.01f + DistW; //! <- This will help outliers pop out more often (must not be 0.0!)
 	DistW *= 1.0f + fabsf(Dist.b); //! <- Further penalize distortion by luma distortion
 	struct BGRAf_t TrainData = BGRAf_Muli( Data, TrainW);
 	struct BGRAf_t DistData  = BGRAf_Muli(&Dist, DistW);
@@ -31,28 +31,30 @@ static inline int QuantCluster_Resolve(struct QuantCluster_t *x) {
 }
 
 //! Split a quantization cluster
-static inline void QuantCluster_Split(struct QuantCluster_t *Clusters, int SrcCluster, int DstCluster, const struct BGRAf_t *Data, int nData, int32_t *DataClusters) {
+static inline void QuantCluster_Split(struct QuantCluster_t *Clusters, int SrcCluster, int DstCluster, const struct BGRAf_t *Data, int nData, int32_t *DataClusters, int Recluster) {
 	//! Shift the cluster in either direction of the distortion vector
 	struct BGRAf_t Dist = BGRAf_Divi(&Clusters[SrcCluster].Dist, Clusters[SrcCluster].DistWeight);
 	Clusters[DstCluster].Centroid = BGRAf_Add(&Clusters[SrcCluster].Centroid, &Dist);
 	Clusters[SrcCluster].Centroid = BGRAf_Sub(&Clusters[SrcCluster].Centroid, &Dist);
 
 	//! Re-assign clusters
-	int n;
-	QuantCluster_ClearTraining(&Clusters[SrcCluster]);
-	QuantCluster_ClearTraining(&Clusters[DstCluster]);
-	for(n=0;n<nData;n++) if(DataClusters[n] == SrcCluster) {
-		float DistSrc = BGRAf_ColDistance(&Data[n], &Clusters[SrcCluster].Centroid);
-		float DistDst = BGRAf_ColDistance(&Data[n], &Clusters[DstCluster].Centroid);
-		if(DistSrc < DistDst) {
-			QuantCluster_Train(&Clusters[SrcCluster], &Data[n]);
-		} else {
-			QuantCluster_Train(&Clusters[DstCluster], &Data[n]);
-			DataClusters[n] = DstCluster;
+	if(Recluster) {
+		int n;
+		QuantCluster_ClearTraining(&Clusters[SrcCluster]);
+		QuantCluster_ClearTraining(&Clusters[DstCluster]);
+		for(n=0;n<nData;n++) if(DataClusters[n] == SrcCluster) {
+			float DistSrc = BGRAf_ColDistance(&Data[n], &Clusters[SrcCluster].Centroid);
+			float DistDst = BGRAf_ColDistance(&Data[n], &Clusters[DstCluster].Centroid);
+			if(DistSrc < DistDst) {
+				QuantCluster_Train(&Clusters[SrcCluster], &Data[n]);
+			} else {
+				QuantCluster_Train(&Clusters[DstCluster], &Data[n]);
+				DataClusters[n] = DstCluster;
+			}
 		}
+		QuantCluster_Resolve(&Clusters[SrcCluster]);
+		QuantCluster_Resolve(&Clusters[DstCluster]);
 	}
-	QuantCluster_Resolve(&Clusters[SrcCluster]);
-	QuantCluster_Resolve(&Clusters[DstCluster]);
 }
 
 /**************************************/
@@ -117,8 +119,10 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
 				if(EmptyCluster != -1) DstCluster = EmptyCluster, EmptyCluster = Clusters[EmptyCluster].Next;
 				else DstCluster = nClusterCur++;
 
-				//! Split and recluster
-				QuantCluster_Split(Clusters, MaxDistCluster, DstCluster, Data, nData, DataClusters);
+				//! Split cluster, but do NOT recluster the data.
+				//! By not re-clustering, we give outliers a better chance
+				//! of making it through to a better-fitting cluster.
+				QuantCluster_Split(Clusters, MaxDistCluster, DstCluster, Data, nData, DataClusters, 0);
 
 				//! Check if we have more clusters that need splitting
 				MaxDistCluster = Clusters[MaxDistCluster].Next;
@@ -159,7 +163,7 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
 
 			//! Split the most distorted clusters into any empty ones
 			while(EmptyCluster != -1 && MaxDistCluster != -1) {
-				QuantCluster_Split(Clusters, MaxDistCluster, EmptyCluster, Data, nData, DataClusters);
+				QuantCluster_Split(Clusters, MaxDistCluster, EmptyCluster, Data, nData, DataClusters, 1);
 				MaxDistCluster = Clusters[MaxDistCluster].Next;
 				EmptyCluster   = Clusters[EmptyCluster].Next;
 			}
