@@ -1,6 +1,8 @@
+CFILES := Bitmap.c Quantize.c Dither.c Qualetize.c Tiles.c tilequant.c
+
 all:
 	mkdir -p release
-	$(CC) -lm -O2 -Wall -Wextra Bitmap.c Quantize.c Qualetize.c Tiles.c tilequant.c -o release/tilequant
+	$(CC) -lm -O2 -Wall -Wextra $(CFILES) -o release/tilequant
 
 UNAME := $(shell uname)
 
@@ -18,8 +20,7 @@ endif
 
 dll:
 	mkdir -p release
-	$(CC) -c -lm -O2 -Wall -fPIC -Wextra Bitmap.c Quantize.c Qualetize.c Tiles.c tilequantDLL.c -DDECLSPEC="$(DDECLSPEC)"
-	$(CC) -shared -o release/$(TARGET) tilequantDLL.o Bitmap.o Quantize.o Qualetize.o Tiles.o
+	$(CC) -shared -o release/$(TARGET) -lm -O2 -Wall -fPIC -Wextra $(CFILES) -DDECLSPEC="$(DDECLSPEC)"
 
 .PHONY: clean
 clean:
