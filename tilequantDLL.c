@@ -61,7 +61,7 @@ DECLSPEC int QualetizeFromRawImage(
 	//! Do processing
 	//! NOTE: Do NOT allow image replacing, or things will go
 	//! very wrong when Qualetize() tries to free the pointers.
-	struct TilesData_t *TilesData = TilesData_FromBitmap(&Ctx, TileW, TileH);
+	struct TilesData_t *TilesData = TilesData_FromBitmap(&Ctx, TileW, TileH, (const struct BGRA8_t*)BitRange, DitherMode, DitherLevel);
 	if(!TilesData) return 0;
 	(void)Qualetize(
 		&Ctx, TilesData,

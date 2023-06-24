@@ -149,7 +149,7 @@ int main(int argc, const char *argv[]) {
 
 	//! Perform processing
 	//! NOTE: PxData and Palette will be assigned to image; do NOT destroy
-	struct TilesData_t *TilesData = TilesData_FromBitmap(&Image, TileW, TileH);
+	struct TilesData_t *TilesData = TilesData_FromBitmap(&Image, TileW, TileH, &BitRange, DitherMode, DitherLevel);
 	       uint8_t     *PxData    = malloc(Image.Width * Image.Height * sizeof(uint8_t));
 	struct BGRAf_t     *Palette   = calloc(BMP_PALETTE_COLOURS, sizeof(struct BGRAf_t));
 	if(!TilesData || !PxData || !Palette) {
@@ -179,10 +179,10 @@ int main(int argc, const char *argv[]) {
 
 	//! Output PSNR
 #if MEASURE_PSNR
-	RMSE.b = -0x1.15F2CFp3f*logf(RMSE.b / 255.0f); //! -20*Log10[RMSE/255] == -20/Log[10] * Log[RMSE/255]
-	RMSE.g = -0x1.15F2CFp3f*logf(RMSE.g / 255.0f);
-	RMSE.r = -0x1.15F2CFp3f*logf(RMSE.r / 255.0f);
-	RMSE.a = -0x1.15F2CFp3f*logf(RMSE.a / 255.0f);
+	RMSE.b = -8.68588963f*logf(RMSE.b / 255.0f); //! -20*Log10[RMSE/255] == -20/Log[10] * Log[RMSE/255]
+	RMSE.g = -8.68588963f*logf(RMSE.g / 255.0f);
+	RMSE.r = -8.68588963f*logf(RMSE.r / 255.0f);
+	RMSE.a = -8.68588963f*logf(RMSE.a / 255.0f);
 	printf("PSNR = {%.3fdB, %.3fdB, %.3fdB, %.3fdB}\n", RMSE.b, RMSE.g, RMSE.r, RMSE.a);
 #else
 	(void)RMSE;
