@@ -18,8 +18,8 @@ struct TilesData_t {
 	int TilesX, TilesY;
 	union TilePx_t *TilePxPtr;  //! Tile pixel pointers
 	struct BGRAf_t *TileValue;  //! Tile values (for quantization comparisons)
-	struct BGRAf_t *PxData;     //! Tile pixel data
-	struct BGRAf_t *PxTemp;     //! Temporary processing data
+	struct BGRAf_t *PxData;     //! Tile pixel data           (ImageW*ImageH elements)
+	struct BGRAf_t *PxTemp;     //! Temporary processing data (ImageW*ImageH elements)
 	int32_t        *PxTempIdx;  //! Temporary processing data (palette entry indices)
 	int32_t        *TilePalIdx; //! Tile palette indices
 };
@@ -28,7 +28,14 @@ struct TilesData_t {
 
 //! Convert bitmap to tiles
 //! NOTE: To destroy, call free() on the returned pointer
-struct TilesData_t *TilesData_FromBitmap(const struct BmpCtx_t *Ctx, int TileW, int TileH);
+struct TilesData_t *TilesData_FromBitmap(
+	const struct BmpCtx_t *Ctx,
+	int TileW,
+	int TileH,
+	const struct BGRA8_t *BitRange,
+	int   DitherType,
+	float DitherLevel
+);
 
 //! Create quantized palette
 //! NOTE: PalUnusedEntries is used for 'padding', such as on

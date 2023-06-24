@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 /**************************************/
+#include "Dither.h"
 #include "Quantize.h"
 #include "Tiles.h"
 /**************************************/
@@ -20,13 +21,9 @@
 /**************************************/
 
 //! Fill out the tile data
-//! Separated out from the main function as there is two
-//! paths (palettized, and direct) with identical code
-//! except for how the pixels are fetched.
 static inline void ConvertToTiles(
 	struct TilesData_t *TilesData,
-	const struct BGRA8_t *PxBGR,
-	const        uint8_t *PxIdx,
+	const struct BGRAf_t *PxBGRA,
 	int TileW,
 	int TileH,
 	int nTileX,
@@ -37,18 +34,12 @@ static inline void ConvertToTiles(
 	struct BGRAf_t *TileValue = TilesData->TileValue;
 	struct BGRAf_t *PxData    = TilesData->PxData;
 	for(ty=0;ty<nTileY;ty++) for(tx=0;tx<nTileX;tx++) {
-		//! Copy pixels as YCoCg, and get mean
+		//! Copy pixels as YUV, and get mean
 		struct BGRAf_t Mean = {0,0,0,0};
 		for(py=0;py<TileH;py++) for(px=0;px<TileW;px++) {
-			//! Get original BGR pixel
-			struct BGRA8_t pBGR;
-			if(PxIdx) pBGR = PxBGR[PxIdx[(ty*TileH+py)*(nTileX*TileW) + (tx*TileW+px)]];
-			else      pBGR = PxBGR[      (ty*TileH+py)*(nTileX*TileW) + (tx*TileW+px) ];
-
 			//! Convert and store pixel
-			struct BGRAf_t Px = BGRAf_FromBGRA8(&pBGR);
-			Px = BGRAf_AsYCoCg(&Px);
-			PxData[py*TileW+px] = Px;
+			struct BGRAf_t Px = BGRAf_AsYUV(&PxBGRA[(ty*TileH+py)*(nTileX*TileW) + (tx*TileW+px)]);
+			*PxData++ = Px;
 			Mean = BGRAf_Add(&Mean, &Px);
 		}
 
@@ -75,16 +66,22 @@ static inline void ConvertToTiles(
 		Mean.a /= (float)(TileW*TileH);
 
 		//! Store value and move to next tile
-		(TilePxPtr++)->PxBGRAf = PxData;
+		(TilePxPtr++)->PxBGRAf = PxData - TileW*TileH;
 		*TileValue++ = Mean;
-		PxData += TileW*TileH;
 	}
 }
 
 /**************************************/
 
 //! Convert bitmap to tiles
-struct TilesData_t *TilesData_FromBitmap(const struct BmpCtx_t *Ctx, int TileW, int TileH) {
+struct TilesData_t *TilesData_FromBitmap(
+	const struct BmpCtx_t *Ctx,
+	int TileW,
+	int TileH,
+	const struct BGRA8_t *BitRange,
+	int   DitherType,
+	float DitherLevel
+) {
 	//! Allocate memory for tiles
 	int nPx    = Ctx->Width * Ctx->Height;
 	int nTileX = (Ctx->Width  / TileW);
@@ -114,9 +111,24 @@ struct TilesData_t *TilesData_FromBitmap(const struct BmpCtx_t *Ctx, int TileW, 
 	TilesData->PxTempIdx  = (int32_t       *)DATA_ALIGN(TilesData->PxTemp    + nPx);
 	TilesData->TilePalIdx = (int32_t       *)DATA_ALIGN(TilesData->PxTempIdx + nPx);
 
-	//! Fill tiles
-	if(Ctx->ColPal) ConvertToTiles(TilesData, Ctx->ColPal, Ctx->PxIdx, TileW, TileH, nTileX, nTileY);
-	else            ConvertToTiles(TilesData, Ctx->PxBGR,  NULL,       TileW, TileH, nTileX, nTileY);
+	//! Apply first-pass dithering into PxTemp[] and fill tiles using this data
+	DitherImage(
+		Ctx,
+		BitRange,
+		TilesData->PxTemp,
+		0,
+		0,
+		0,
+		0,
+		0,
+		NULL,
+		NULL,
+		NULL,
+		DitherType,
+		DitherLevel,
+		TilesData->PxData //! <- This is unused until after ConvertToTiles(), so we can use it here
+	);
+	ConvertToTiles(TilesData, TilesData->PxTemp, TileW, TileH, nTileX, nTileY);
 
 	//! Return tiles array
 	return TilesData;
