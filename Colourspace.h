@@ -44,22 +44,22 @@ static inline struct BGRAf_t BGRAf_FromBGRA8(const struct BGRA8_t *x) {
 /**************************************/
 
 //! x->b = Y
-//! x->g = Cg
-//! x->r = Co
-static inline struct BGRAf_t BGRAf_AsYCoCg(const struct BGRAf_t *x) {
+//! x->g = Cb
+//! x->r = Cr
+//! Using ITU-R BT.709 constants
+static inline struct BGRAf_t BGRAf_AsYUV(const struct BGRAf_t *x) {
 	return (struct BGRAf_t){
-		( x->r + 2*x->g + x->b) * 0.25f,
-		(-x->r + 2*x->g - x->b) * 0.25f,
-		( x->r          - x->b) * 0.50f,
-		( x->a                ) * 1.00f
+		 0.2126f*x->r + 0.71520f*x->g + 0.0722f*x->b,
+		-0.1146f*x->r - 0.38540f*x->g + 0.5000f*x->b,
+		 0.5f   *x->r - 0.45420f*x->g - 0.0458f*x->b,
+		x->a
 	};
 }
-
-static inline struct BGRAf_t BGRAf_FromYCoCg(const struct BGRAf_t *x) {
+static inline struct BGRAf_t BGRAf_FromYUV(const struct BGRAf_t *x) {
 	return (struct BGRAf_t){
-		x->b - x->g - x->r,
-		x->b + x->g,
-		x->b - x->g + x->r,
+		x->b + 1.855609686f*x->g + 0.000105740f*x->b,
+		x->b - 0.187280216f*x->g - 0.468124625f*x->r,
+		x->b - 0.000151501f*x->g + 1.574765276f*x->r,
 		x->a
 	};
 }
