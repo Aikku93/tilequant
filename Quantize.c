@@ -1,4 +1,6 @@
 /**************************************/
+#include <math.h>
+/**************************************/
 #include "Colourspace.h"
 #include "Quantize.h"
 /**************************************/
@@ -13,10 +15,11 @@ static inline void QuantCluster_ClearTraining(struct QuantCluster_t *x) {
 //! Add data to training
 static inline void QuantCluster_Train(struct QuantCluster_t *Dst, const struct BGRAf_t *Data) {
 	struct BGRAf_t Dist = BGRAf_Sub(Data, &Dst->Centroid);
+	Dist = BGRAf_Abs(&Dist);
 
 	float DistW  = BGRAf_Len2(&Dist);
-	float TrainW = 0.01f + DistW; //! <- This will help outliers pop out more often (must not be 0.0!)
-	DistW *= 1.0f + fabsf(Dist.b); //! <- Further penalize distortion by luma distortion
+	float TrainW = 0.001f + DistW; //! <- This will help outliers pop out more often (must not be 0.0!)
+	DistW *= 1.0f + Dist.b*Dist.b; //! <- Further penalize distortion by luma distortion
 	struct BGRAf_t TrainData = BGRAf_Muli( Data, TrainW);
 	struct BGRAf_t DistData  = BGRAf_Muli(&Dist, DistW);
 	Dst->TrainWeight += TrainW, Dst->Train = BGRAf_Add(&Dst->Train, &TrainData);
@@ -136,7 +139,7 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
 			for(i=0;i<nClusterCur;i++) QuantCluster_ClearTraining(&Clusters[i]);
 			for(i=0;i<nData;i++) {
 				int   BestIdx  = -1;
-				float BestDist = 8.0e37f; //! Arbitrarily large number
+				float BestDist = INFINITY;
 				for(j=0;j<nClusterCur;j++) {
 					float Dist = BGRAf_ColDistance(&Data[i], &Clusters[j].Centroid);
 					if(Dist < BestDist) BestIdx = j, BestDist = Dist;
