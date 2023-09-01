@@ -1,9 +1,9 @@
 /**************************************/
 #pragma once
 /**************************************/
-#include "Bitmap.h"
-#include "Colourspace.h"
-#include "Tiles.h"
+#include "bitmap.h"
+#include "colourspace.h"
+#include "tiles.h"
 /**************************************/
 
 //! Dither modes available
@@ -22,19 +22,19 @@
 //!  * With ReplaceImage != 0, {Image->ColMap,Image->PxIdx} (or
 //!    Image->PxBGR) will be free()'d and replaced with {PxData,Palette}.
 struct BGRAf_t Qualetize(
-	struct BmpCtx_t *Image,
-	struct TilesData_t *TilesData,
-	uint8_t *PxData,
-	struct BGRAf_t *Palette,
-	int   MaxTilePals,
-	int   MaxPalSize,
-	int   PalUnused,
-	int   nTileClusterPasses,
-	int   nColourClusterPasses,
-	const struct BGRA8_t *BitRange,
-	int   DitherType,
-	float DitherLevel,
-	int   ReplaceImage
+    struct BmpCtx_t *Image,
+    struct TilesData_t *TilesData,
+    uint8_t *PxData,
+    struct BGRAf_t *Palette,
+    int   MaxTilePals,
+    int   MaxPalSize,
+    int   PalUnused,
+    int   nTileClusterPasses,
+    int   nColourClusterPasses,
+    const struct BGRA8_t *BitRange,
+    int   DitherType,
+    float DitherLevel,
+    int   ReplaceImage
 );
 
 /**************************************/

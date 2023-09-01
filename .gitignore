@@ -1,2 +1,7 @@
 tests/*
 release/*
+tilequant
+tilequant.exe
+libtilequant.so
+libtilequant.dll
+

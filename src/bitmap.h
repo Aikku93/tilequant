@@ -3,18 +3,20 @@
 /**************************************/
 #include <stdint.h>
 /**************************************/
-#include "Colourspace.h"
+#include "colourspace.h"
 /**************************************/
 #define BMP_PALETTE_COLOURS 256
 /**************************************/
 
-struct BmpCtx_t {
-	int Width, Height;
-	struct BGRA8_t *ColPal;
-	union {
-		       uint8_t *PxIdx; //! Palettized
-		struct BGRA8_t *PxBGR; //! Direct
-	};
+struct BmpCtx_t
+{
+    int Width, Height;
+    struct BGRA8_t *ColPal;
+    union
+    {
+        uint8_t *PxIdx; //! Palettized
+        struct BGRA8_t *PxBGR; //! Direct
+    };
 };
 
 /**************************************/

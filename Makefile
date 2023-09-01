@@ -1,8 +1,8 @@
-CFILES := Bitmap.c Quantize.c Dither.c Qualetize.c Tiles.c tilequant.c
-
-all:
-	mkdir -p release
-	$(CC) -lm -O2 -Wall -Wextra $(CFILES) -o release/tilequant
+PROJECT := tilequant
+CFLAGS := -O2 -Wall -Wextra -Isrc
+LIBS := -lm -s
+CFILES := src/bitmap.c src/quantize.c src/dither.c src/qualetize.c src/tiles.c src/tilequant.c
+RM := rm -rf
 
 UNAME := $(shell uname)
 
@@ -13,15 +13,22 @@ ifeq ($(UNAME), Darwin)
 IS_UNIX = true
 endif
 ifdef IS_UNIX
-TARGET = "libtilequant.so"
+EXE = $(PROJECT)
+DLL = lib$(PROJECT).so
 else
-TARGET = "libtilequant.dll"
+EXE = $(PROJECT).exe
+DLL = lib$(PROJECT).dll
 endif
 
-dll:
-	mkdir -p release
-	$(CC) -shared -o release/$(TARGET) -lm -O2 -Wall -fPIC -Wextra $(CFILES) -DDECLSPEC="$(DDECLSPEC)"
-
 .PHONY: clean
+
+all: $(EXE) $(DLL)
+
+$(EXE): $(CFILES)
+	$(CC) $(CFLAGS) $^ $(LIBS) -o $@
+
+$(DLL): $(CFILES)
+	$(CC) $(CFLAGS) -shared -fPIC -DDECLSPEC="$(DDECLSPEC)" $^ $(LIBS) -o $@
+
 clean:
-	rm -rf release
+	$(RM) $(EXE) $(DLL)
