@@ -46,26 +46,10 @@ static inline void ConvertToTiles(
                     Mean = BGRAf_Add(&Mean, &Px);
                 }
 
-            //! Now normalize the chroma values by the luma value, and normalize
-            //! the luma value to the mean for this tile.
-            //! The idea here is to cluster the colour similarity after adjusting
-            //! for luminosity (so that similar colours of different luminosities
-            //! will end up in the same palette), and then treat the luma as just
-            //! another dimension to optimize for.
-            //! Note that the alpha channels is just normalized as per usual,
-            //! because it is assumed that the input is pre-multiplied.
-            //! NOTE: Dividing by the square root of the luminosity improves PSNR;
-            //! I have no idea why this is the case, though.
-            float Norm = Mean.b;
-            if(Norm)
-            {
-                //! NOTE: Chroma values are scaled by 0.1 relative to luma and
-                //! alpha; this is to give 10x more importance to the latter,
-                //! and is used to fixe some edge cases with subtle details.
-                float InvNorm = 0.1f / sqrtf(Norm);
-                Mean.g *= InvNorm;
-                Mean.r *= InvNorm;
-            }
+            //! Now normalize the luma and alpha, but leave chroma alone.
+            //! The idea here is that the importance of the variance in
+            //! chroma is proportional to the number of pixels in the tile,
+            //! while luma and alpha are independent dimensions to optimize.
             Mean.b /= (float)(TileW*TileH);
             Mean.a /= (float)(TileW*TileH);
 
@@ -189,7 +173,13 @@ int TilesData_QuantizePalettes(
             for(j=0; j<nTiles; j++) if(TilesData->TilePalIdx[j] == i)
                 {
                     const struct BGRAf_t *Src = TilesData->TilePxPtr[j].PxBGRAf;
-                    for(k=0; k<nPxTile; k++) *Dst++ = *Src++;
+                    for(k=0; k<nPxTile; k++)
+                        {
+                            //! NOTE: Do not add alpha=0 pixels, as this is a separate
+                            //! thing altogether when PalUnusedEntries != 0.
+                            struct BGRAf_t x = *Src++;
+                            if(PalUnusedEntries != 0 && x.a != 0) *Dst++ = x;
+                        }
                 }
             PxCnt = Dst - PxTemp;
         }
@@ -203,7 +193,7 @@ int TilesData_QuantizePalettes(
         {
             0,0,0,0
         };
-        for(j=0; j<MaxPalSize;      j++) *Palette++ = Clusters[j].Centroid;
+        for(j=0; j<MaxPalSize;       j++) *Palette++ = Clusters[j].Centroid;
     }
 
     //! Clean up, return
