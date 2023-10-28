@@ -68,10 +68,10 @@ static inline struct BGRAf_t BGRAf_AsYUV(const struct BGRAf_t *x)
 {
     return (struct BGRAf_t)
     {
-        0.2126f*x->r + 0.71520f*x->g + 0.0722f*x->b,
-                -0.1146f*x->r - 0.38540f*x->g + 0.5000f*x->b,
-                0.5f   *x->r - 0.45420f*x->g - 0.0458f*x->b,
-                x->a
+         0.2126f*x->r + 0.71520f*x->g + 0.0722f*x->b,
+        -0.1146f*x->r - 0.38540f*x->g + 0.5000f*x->b,
+         0.5f   *x->r - 0.45420f*x->g - 0.0458f*x->b,
+        x->a
     };
 }
 static inline struct BGRAf_t BGRAf_FromYUV(const struct BGRAf_t *x)
