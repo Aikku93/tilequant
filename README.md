@@ -10,3 +10,4 @@ Run `make` to build the tool, then call `tilequant Input.bmp Output.bmp (no. of 
 ## Authors
 * **Ruben Nunez** - *Initial work* - [Aikku93](https://github.com/Aikku93)
 * **Marco Köpcke** - *Modifications and motivation for DLL interface* - [Parakoopa](https://github.com/Parakoopa)
+ * **zvezdochiot** - *Code and git cleanup* - [zvezdochiot](https://github.com/zvezdochiot)
