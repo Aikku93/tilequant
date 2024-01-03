@@ -202,6 +202,14 @@ static inline struct BGRAf_t BGRAf_InvDivi(const struct BGRAf_t *a, float b)
 
 /**************************************/
 
+static inline float BGRAf_Sum(const struct BGRAf_t *x)
+{
+    return x->b +
+           x->g +
+           x->r +
+           x->a ;
+}
+
 static inline float BGRAf_Dot(const struct BGRAf_t *a, const struct BGRAf_t *b)
 {
     return a->b*b->b +
