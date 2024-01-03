@@ -17,16 +17,22 @@ static inline void QuantCluster_ClearTraining(struct QuantCluster_t *x)
     };
 }
 
+//! Convert data error to distance measure
+static inline float QuantCluster_ErrorToDist(struct BGRAf_t *x) {
+#if 0 //! Minimize L2 norm
+    float Dist = BGRAf_Len2(x);
+#else //! Minimize L1 norm - this seems to give better results
+    struct BGRAf_t xAbs = BGRAf_Abs(x);
+    float Dist = BGRAf_Sum(&xAbs);
+#endif
+    return Dist;
+}
+
 //! Add data to training
 static inline void QuantCluster_Train(struct QuantCluster_t *Dst, const struct BGRAf_t *Data, int DataIdx)
 {
     struct BGRAf_t Error = BGRAf_Sub(Data, &Dst->Centroid);
-#if 0 //! Minimize L2 norm
-    float Dist = BGRAf_Len2(&Error);
-#else //! Minimize L1 norm - this seems to give better results
-    Error = BGRAf_Abs(&Error);
-    float Dist = BGRAf_Sum(&Error);
-#endif
+    float Dist = QuantCluster_ErrorToDist(&Error);
     if(Dist > Dst->MaxDistVal) Dst->MaxDistIdx = DataIdx, Dst->MaxDistVal = Dist;
     Dst->Train = BGRAf_Add(&Dst->Train, Data);
     Dst->nPoints++;
@@ -61,8 +67,10 @@ static inline void QuantCluster_Split(struct QuantCluster_t *Clusters, int SrcCl
         QuantCluster_ClearTraining(&Clusters[DstCluster]);
         for(n=0; n<nData; n++) if(DataClusters[n] == SrcCluster)
             {
-                float DistSrc = BGRAf_ColDistance(&Data[n], &Clusters[SrcCluster].Centroid);
-                float DistDst = BGRAf_ColDistance(&Data[n], &Clusters[DstCluster].Centroid);
+                struct BGRAf_t SrcError = BGRAf_Sub(&Data[n], &Clusters[SrcCluster].Centroid);
+                struct BGRAf_t DstError = BGRAf_Sub(&Data[n], &Clusters[DstCluster].Centroid);
+                float DistSrc = QuantCluster_ErrorToDist(&SrcError);
+                float DistDst = QuantCluster_ErrorToDist(&DstError);
                 if(DistSrc < DistDst)
                 {
                     QuantCluster_Train(&Clusters[SrcCluster], &Data[n], n);
