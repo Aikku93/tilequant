@@ -5,6 +5,10 @@
 #include "quantize.h"
 /**************************************/
 
+#define CONVERGENCE_THRESHOLD 0.99999f
+
+/**************************************/
+
 //! Clear training data (NOTE: Do NOT destroy the centroid or linked list position)
 static inline void QuantCluster_ClearTraining(struct QuantCluster_t *x)
 {
@@ -171,6 +175,7 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
         //! Perform refinement passes
         int Pass;
         float ThisTotalError = 0.0f;
+        float ClusterLastError = INFINITY;
         for(Pass=0; Pass<nPasses; Pass++)
         {
             ThisTotalError = 0.0f;
@@ -217,10 +222,14 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
                 MaxDistCluster = Clusters[MaxDistCluster].Next;
                 EmptyCluster   = Clusters[EmptyCluster].Next;
             }
+
+            //! Stop when solution stops moving
+            if(ThisTotalError > CONVERGENCE_THRESHOLD*ClusterLastError) break;
+            ClusterLastError = ThisTotalError;
         }
 
 	//! If we've stopped converging, early exit
-	if(ThisTotalError > 0.999f*LastTotalError) break;
+	if(ThisTotalError > CONVERGENCE_THRESHOLD*LastTotalError) break;
 	LastTotalError = ThisTotalError;
     }
 }
