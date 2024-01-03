@@ -9,43 +9,49 @@
 static inline void QuantCluster_ClearTraining(struct QuantCluster_t *x)
 {
     x->nPoints = 0;
-    x->TrainWeight = x->DistWeight = 0.0f;
-    x->Train = x->Dist = (struct BGRAf_t)
+    x->MaxDistIdx = -1;
+    x->MaxDistVal = 0.0f;
+    x->Train = (struct BGRAf_t)
     {
         0,0,0,0
     };
 }
 
 //! Add data to training
-static inline void QuantCluster_Train(struct QuantCluster_t *Dst, const struct BGRAf_t *Data)
+static inline void QuantCluster_Train(struct QuantCluster_t *Dst, const struct BGRAf_t *Data, int DataIdx)
 {
-    struct BGRAf_t Dist = BGRAf_Sub(Data, &Dst->Centroid);
-    Dist = BGRAf_Abs(&Dist);
-
-    float DistW  = BGRAf_Len2(&Dist);
-    float TrainW = 0.001f + DistW; //! <- This will help outliers pop out more often (must not be 0.0!)
-    DistW *= 1.0f + Dist.b*Dist.b; //! <- Further penalize distortion by luma distortion
-    struct BGRAf_t TrainData = BGRAf_Muli( Data, TrainW);
-    struct BGRAf_t DistData  = BGRAf_Muli(&Dist, DistW);
-    Dst->TrainWeight += TrainW, Dst->Train = BGRAf_Add(&Dst->Train, &TrainData);
-    Dst->DistWeight  += DistW,  Dst->Dist  = BGRAf_Add(&Dst->Dist,  &DistData);
+    struct BGRAf_t Error = BGRAf_Sub(Data, &Dst->Centroid);
+#if 0 //! Minimize L2 norm
+    float Dist = BGRAf_Len2(&Error);
+#else //! Minimize L1 norm - this seems to give better results
+    Error = BGRAf_Abs(&Error);
+    float Dist = BGRAf_Sum(&Error);
+#endif
+    if(Dist > Dst->MaxDistVal) Dst->MaxDistIdx = DataIdx, Dst->MaxDistVal = Dist;
+    Dst->Train = BGRAf_Add(&Dst->Train, Data);
     Dst->nPoints++;
 }
 
 //! Resolve the centroid from training data
 static inline int QuantCluster_Resolve(struct QuantCluster_t *x)
 {
-    if(x->nPoints) x->Centroid = BGRAf_Divi(&x->Train, x->TrainWeight);
+    if(x->nPoints) x->Centroid = BGRAf_Divi(&x->Train, x->nPoints);
     return x->nPoints;
 }
 
 //! Split a quantization cluster
 static inline void QuantCluster_Split(struct QuantCluster_t *Clusters, int SrcCluster, int DstCluster, const struct BGRAf_t *Data, int nData, int32_t *DataClusters, int Recluster)
 {
-    //! Shift the cluster in either direction of the distortion vector
-    struct BGRAf_t Dist = BGRAf_Divi(&Clusters[SrcCluster].Dist, Clusters[SrcCluster].DistWeight);
-    Clusters[DstCluster].Centroid = BGRAf_Add(&Clusters[SrcCluster].Centroid, &Dist);
-    Clusters[SrcCluster].Centroid = BGRAf_Sub(&Clusters[SrcCluster].Centroid, &Dist);
+    //! Create a new cluster from this "most-distorted" data - this helps
+    //! us make it out of a local optimum into a better cluster fit
+    Clusters[DstCluster].Centroid = Data[Clusters[SrcCluster].MaxDistIdx];
+
+    //! ... and remove said cluster from the original centroid so we can
+    //! correctly assign the new clusters. This can have some floating-point
+    //! error in the subtraction, but hopefully this will be negligible
+    Clusters[SrcCluster].Train = BGRAf_Sub(&Clusters[SrcCluster].Train, &Data[Clusters[SrcCluster].MaxDistIdx]);
+    Clusters[SrcCluster].nPoints--;
+    Clusters[SrcCluster].Centroid = BGRAf_Divi(&Clusters[SrcCluster].Train, Clusters[SrcCluster].nPoints);
 
     //! Re-assign clusters
     if(Recluster)
@@ -59,11 +65,11 @@ static inline void QuantCluster_Split(struct QuantCluster_t *Clusters, int SrcCl
                 float DistDst = BGRAf_ColDistance(&Data[n], &Clusters[DstCluster].Centroid);
                 if(DistSrc < DistDst)
                 {
-                    QuantCluster_Train(&Clusters[SrcCluster], &Data[n]);
+                    QuantCluster_Train(&Clusters[SrcCluster], &Data[n], n);
                 }
                 else
                 {
-                    QuantCluster_Train(&Clusters[DstCluster], &Data[n]);
+                    QuantCluster_Train(&Clusters[DstCluster], &Data[n], n);
                     DataClusters[n] = DstCluster;
                 }
             }
@@ -79,10 +85,10 @@ static int QuantCluster_InsertToDistortionList(struct QuantCluster_t *Clusters, 
 {
     int Next = Head;
     int Prev = -1;
-    float Dist = Clusters[Idx].DistWeight;
+    float Dist = Clusters[Idx].MaxDistVal;
     if(Dist != 0.0f)
     {
-        while(Next != -1 && Dist < Clusters[Next].DistWeight)
+        while(Next != -1 && Dist < Clusters[Next].MaxDistVal)
         {
             Prev = Next;
             Next = Clusters[Next].Next;
@@ -117,8 +123,8 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
 
     //! Second pass to properly train the distortion measures
     QuantCluster_ClearTraining(&Clusters[0]);
-    for(i=0; i<nData; i++) QuantCluster_Train(&Clusters[0], &Data[i]);
-    if(Clusters[0].DistWeight == 0.0f) return; //! Global convergence already reached (ie. single item)
+    for(i=0; i<nData; i++) QuantCluster_Train(&Clusters[0], &Data[i], i);
+    if(Clusters[0].MaxDistVal == 0.0f) return; //! Global convergence already reached (ie. single item)
     Clusters[0].Next = -1;
 
     //! Begin splitting clusters to form the initial codebook
@@ -145,9 +151,7 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
                 else DstCluster = nClusterCur++;
 
                 //! Split cluster, but do NOT recluster the data.
-                //! By not re-clustering, we give outliers a better chance
-                //! of making it through to a better-fitting cluster.
-                QuantCluster_Split(Clusters, MaxDistCluster, DstCluster, Data, nData, DataClusters, 0);
+                QuantCluster_Split(Clusters, MaxDistCluster, DstCluster, Data, nData, DataClusters, 1);
 
                 //! Check if we have more clusters that need splitting
                 MaxDistCluster = Clusters[MaxDistCluster].Next;
@@ -170,7 +174,7 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
                     if(Dist < BestDist) BestIdx = j, BestDist = Dist;
                 }
                 DataClusters[i] = BestIdx;
-                QuantCluster_Train(&Clusters[BestIdx], &Data[i]);
+                QuantCluster_Train(&Clusters[BestIdx], &Data[i], i);
             }
 
             //! Resolve clusters
@@ -182,7 +186,7 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
                 if(QuantCluster_Resolve(&Clusters[i]))
                 {
                     //! Only insert to the list if the distortion is non-zero
-                    if(Clusters[i].DistWeight != 0.0f)
+                    if(Clusters[i].MaxDistVal != 0.0f)
                     {
                         MaxDistCluster = QuantCluster_InsertToDistortionList(Clusters, i, MaxDistCluster);
                     }

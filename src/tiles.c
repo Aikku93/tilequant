@@ -8,11 +8,8 @@
 #include "tiles.h"
 /**************************************/
 
-//! NOTE: Something is probably broken about how clustering is
-//! implemented. Sometimes results converge, and other times
-//! they /diverge/. This probably needs to be investigated.
-#define DEFAULT_TILECLUSTER_PASSES   8
-#define DEFAULT_COLOURCLUSTER_PASSES 8
+#define DEFAULT_TILECLUSTER_PASSES   16
+#define DEFAULT_COLOURCLUSTER_PASSES 16
 
 /**************************************/
 #define ALIGN2N(x,N) (((x) + (N)-1) &~ ((N)-1))

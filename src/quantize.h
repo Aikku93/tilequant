@@ -8,10 +8,9 @@ struct QuantCluster_t
 {
     int   Next;
     int   nPoints;
-    float TrainWeight;
-    float DistWeight;
+    int   MaxDistIdx;
+    float MaxDistVal;
     struct BGRAf_t Train;
-    struct BGRAf_t Dist;
     struct BGRAf_t Centroid;
 };
 
