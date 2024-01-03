@@ -139,10 +139,11 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
     int nClusterCur = 1;
     int MaxDistCluster = 0;
     int EmptyCluster = -1;
-    while(MaxDistCluster != -1 && nClusterCur < nCluster)
+    float LastTotalError = INFINITY;
+    while(nClusterCur < nCluster)
     {
         //! Split the most distorted cluster into a new one
-        {
+        if(MaxDistCluster != -1) {
             //! Setting N=1 uses iterative splitting (slow)
             //! Setting N=nClusterCur uses binary splitting (faster)
             //! We use binary splitting, and just use more refinement passes,
@@ -169,8 +170,10 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
 
         //! Perform refinement passes
         int Pass;
+        float ThisTotalError = 0.0f;
         for(Pass=0; Pass<nPasses; Pass++)
         {
+            ThisTotalError = 0.0f;
             for(i=0; i<nClusterCur; i++) QuantCluster_ClearTraining(&Clusters[i]);
             for(i=0; i<nData; i++)
             {
@@ -181,6 +184,7 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
                     float Dist = BGRAf_ColDistance(&Data[i], &Clusters[j].Centroid);
                     if(Dist < BestDist) BestIdx = j, BestDist = Dist;
                 }
+                ThisTotalError += BestDist;
                 DataClusters[i] = BestIdx;
                 QuantCluster_Train(&Clusters[BestIdx], &Data[i], i);
             }
@@ -205,6 +209,11 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
                     Clusters[i].Next = EmptyCluster, EmptyCluster = i;
                 }
             }
+
+            //! If we've stopped converging, early exit
+            if(MaxDistCluster == -1) break;
+            if(ThisTotalError > 0.999f*LastTotalError) break;
+            LastTotalError = ThisTotalError;
 
             //! Split the most distorted clusters into any empty ones
             while(EmptyCluster != -1 && MaxDistCluster != -1)
