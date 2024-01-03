@@ -43,12 +43,10 @@ static inline void ConvertToTiles(
                     Mean = BGRAf_Add(&Mean, &Px);
                 }
 
-            //! Now normalize the luma and alpha, but leave chroma alone.
-            //! The idea here is that the importance of the variance in
-            //! chroma is proportional to the number of pixels in the tile,
-            //! while luma and alpha are independent dimensions to optimize.
-            Mean.b /= (float)(TileW*TileH);
-            Mean.a /= (float)(TileW*TileH);
+            //! Now reduce luma importance slightly because otherwise we
+            //! try too hard to optimize for that and forget about colour
+            Mean.b *= 1.0f / 3;
+            Mean.a /= (float)(TileW*TileH); //! <- This seems to be necessary for some reason or another :/
 
             //! Store value and move to next tile
             (TilePxPtr++)->PxBGRAf = PxData - TileW*TileH;
