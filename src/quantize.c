@@ -210,11 +210,6 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
                 }
             }
 
-            //! If we've stopped converging, early exit
-            if(MaxDistCluster == -1) break;
-            if(ThisTotalError > 0.999f*LastTotalError) break;
-            LastTotalError = ThisTotalError;
-
             //! Split the most distorted clusters into any empty ones
             while(EmptyCluster != -1 && MaxDistCluster != -1)
             {
@@ -223,6 +218,10 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
                 EmptyCluster   = Clusters[EmptyCluster].Next;
             }
         }
+
+	//! If we've stopped converging, early exit
+	if(ThisTotalError > 0.999f*LastTotalError) break;
+	LastTotalError = ThisTotalError;
     }
 }
 
