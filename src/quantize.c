@@ -5,10 +5,6 @@
 #include "quantize.h"
 /**************************************/
 
-#define CONVERGENCE_THRESHOLD 0.99999f
-
-/**************************************/
-
 //! Clear training data (NOTE: Do NOT destroy the centroid or linked list position)
 static inline void QuantCluster_ClearTraining(struct QuantCluster_t *x)
 {
@@ -55,14 +51,14 @@ static inline void QuantCluster_Split(struct QuantCluster_t *Clusters, int SrcCl
     //! Create a new cluster from this "most-distorted" data - this helps
     //! us make it out of a local optimum into a better cluster fit
     Clusters[DstCluster].Centroid = Data[Clusters[SrcCluster].MaxDistIdx];
-
+#if 0 //! This hurts more than it helps
     //! ... and remove said cluster from the original centroid so we can
     //! correctly assign the new clusters. This can have some floating-point
     //! error in the subtraction, but hopefully this will be negligible
     Clusters[SrcCluster].Train = BGRAf_Sub(&Clusters[SrcCluster].Train, &Data[Clusters[SrcCluster].MaxDistIdx]);
     Clusters[SrcCluster].nPoints--;
     Clusters[SrcCluster].Centroid = BGRAf_Divi(&Clusters[SrcCluster].Train, Clusters[SrcCluster].nPoints);
-
+#endif
     //! Re-assign clusters
     if(Recluster)
     {
@@ -125,7 +121,6 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
     {
         0,0,0,0
     };
-    QuantCluster_ClearTraining(&Clusters[0]);
     for(i=0; i<nData; i++)
     {
         DataClusters[i] = 0;
@@ -147,29 +142,40 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
     while(nClusterCur < nCluster)
     {
         //! Split the most distorted cluster into a new one
-        if(MaxDistCluster != -1) {
+        {
             //! Setting N=1 uses iterative splitting (slow)
             //! Setting N=nClusterCur uses binary splitting (faster)
             //! We use binary splitting, and just use more refinement passes,
             //! as this is much faster for the same convergence rate.
             int N = nClusterCur;
-            for(i=0; i<N; i++)
+            do
             {
-                //! If we already hit the maximum number of clusters, break out
-                if(nClusterCur >= nCluster) break;
+                //! If we've run out of pre-determined clusters, brutefroce a search now
+                //! This can happen if we split clusters into empty ones in the last pass
+                int SrcCluster = MaxDistCluster;
+                if(SrcCluster != -1) MaxDistCluster = Clusters[SrcCluster].Next;
+                else {
+                    float MaxDist = 0.0f;
+                    for(i=0;i<nClusterCur;i++) {
+                        if(Clusters[i].MaxDistVal > MaxDist) {
+                            SrcCluster = i;
+                            MaxDist = Clusters[i].MaxDistVal;
+			}
+		    }
+                }
 
                 //! Find the target cluster index and update the EmptyCluster linked list
                 int DstCluster;
                 if(EmptyCluster != -1) DstCluster = EmptyCluster, EmptyCluster = Clusters[EmptyCluster].Next;
-                else DstCluster = nClusterCur++;
+                else {
+                    //! Generated as many clusters as possible?
+                    if(nClusterCur == nCluster) break;
+		    DstCluster = nClusterCur++, N--;
+		}
 
-                //! Split cluster, but do NOT recluster the data.
-                QuantCluster_Split(Clusters, MaxDistCluster, DstCluster, Data, nData, DataClusters, 1);
-
-                //! Check if we have more clusters that need splitting
-                MaxDistCluster = Clusters[MaxDistCluster].Next;
-                if(MaxDistCluster == -1) break;
-            }
+                //! Split cluster
+                QuantCluster_Split(Clusters, SrcCluster, DstCluster, Data, nData, DataClusters, 1);
+            } while(N > 0);
         }
 
         //! Perform refinement passes
@@ -199,14 +205,10 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
             EmptyCluster   = -1;
             for(i=0; i<nClusterCur; i++)
             {
-                //! If the cluster resolves, update the distortion linked list
                 if(QuantCluster_Resolve(&Clusters[i]))
                 {
-                    //! Only insert to the list if the distortion is non-zero
-                    if(Clusters[i].MaxDistVal != 0.0f)
-                    {
-                        MaxDistCluster = QuantCluster_InsertToDistortionList(Clusters, i, MaxDistCluster);
-                    }
+                    //! If the cluster resolves, update the distortion linked list
+                    MaxDistCluster = QuantCluster_InsertToDistortionList(Clusters, i, MaxDistCluster);
                 }
                 else
                 {
@@ -218,18 +220,20 @@ void QuantCluster_Quantize(struct QuantCluster_t *Clusters, int nCluster, const 
             //! Split the most distorted clusters into any empty ones
             while(EmptyCluster != -1 && MaxDistCluster != -1)
             {
-                QuantCluster_Split(Clusters, MaxDistCluster, EmptyCluster, Data, nData, DataClusters, 1);
-                MaxDistCluster = Clusters[MaxDistCluster].Next;
-                EmptyCluster   = Clusters[EmptyCluster].Next;
+                int SrcCluster = MaxDistCluster;
+                int DstCluster = EmptyCluster;
+                QuantCluster_Split(Clusters, SrcCluster, DstCluster, Data, nData, DataClusters, 1);
+                MaxDistCluster = Clusters[SrcCluster].Next;
+                EmptyCluster   = Clusters[DstCluster].Next;
             }
 
             //! Stop when solution stops moving
-            if(ThisTotalError > CONVERGENCE_THRESHOLD*ClusterLastError) break;
+            if(ThisTotalError == 0.0f || ThisTotalError == ClusterLastError) break;
             ClusterLastError = ThisTotalError;
         }
 
 	//! If we've stopped converging, early exit
-	if(ThisTotalError > CONVERGENCE_THRESHOLD*LastTotalError) break;
+	if(ThisTotalError == 0.0f || ThisTotalError == LastTotalError) break;
 	LastTotalError = ThisTotalError;
     }
 }
