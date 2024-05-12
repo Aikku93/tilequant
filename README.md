@@ -1,3 +1,5 @@
+# NOTE: This project has been superseded by the [qualetize tool](https://github.com/Aikku93/qualetize).
+
 # tilequant
 Tile-based Image Quantization Tool
 
